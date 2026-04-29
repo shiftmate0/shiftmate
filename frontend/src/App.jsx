@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
+import AppLayout from './components/layout/AppLayout'  // ← 레이아웃 추가
 
 // 공통
 import LoginPage from './pages/LoginPage'
@@ -29,7 +30,6 @@ function RequireAuth({ children }) {
     return <Navigate to="/login" state={{ from: location }} replace />
   }
 
-  // 초기 비밀번호 강제 변경
   if (user.is_initial_password && location.pathname !== '/change-password') {
     return <Navigate to="/change-password" replace />
   }
@@ -61,45 +61,54 @@ export default function App() {
     <AuthProvider>
       <BrowserRouter>
         <Routes>
-          {/* 공통 */}
+          {/* 로그인/비밀번호 변경 — 레이아웃 없음 */}
           <Route path="/login" element={<LoginPage />} />
           <Route path="/change-password" element={
             <RequireAuth><ChangePasswordPage /></RequireAuth>
           } />
 
-          {/* 관리자 */}
-          <Route path="/admin/dashboard" element={
-            <RequireAuth><RequireAdmin><AdminDashboardPage /></RequireAdmin></RequireAuth>
-          } />
-          <Route path="/admin/employees" element={
-            <RequireAuth><RequireAdmin><AdminEmployeesPage /></RequireAdmin></RequireAuth>
-          } />
-          <Route path="/admin/shift-types" element={
-            <RequireAuth><RequireAdmin><AdminShiftTypesPage /></RequireAdmin></RequireAuth>
-          } />
-          <Route path="/admin/schedules" element={
-            <RequireAuth><RequireAdmin><AdminSchedulesPage /></RequireAdmin></RequireAuth>
-          } />
-          <Route path="/admin/requests" element={
-            <RequireAuth><RequireAdmin><AdminRequestsPage /></RequireAdmin></RequireAuth>
-          } />
+          {/* 레이아웃 적용 — 사이드바+헤더가 있는 모든 페이지 */}
+          {/* 기존 */}
+          {/* <Route element={<RequireAuth><AppLayout /></RequireAuth>}> */}
 
-          {/* 직원 */}
-          <Route path="/employee/dashboard" element={
-            <RequireAuth><RequireEmployee><EmployeeDashboardPage /></RequireEmployee></RequireAuth>
-          } />
-          <Route path="/employee/schedules" element={
-            <RequireAuth><RequireEmployee><EmployeeSchedulesPage /></RequireEmployee></RequireAuth>
-          } />
-          <Route path="/employee/requests" element={
-            <RequireAuth><RequireEmployee><EmployeeRequestsPage /></RequireEmployee></RequireAuth>
-          } />
-          <Route path="/employee/swap-requests" element={
-            <RequireAuth><RequireEmployee><EmployeeSwapRequestsPage /></RequireEmployee></RequireAuth>
-          } />
-          <Route path="/employee/swap-requests/:id" element={
-            <RequireAuth><RequireEmployee><EmployeeSwapRequestDetailPage /></RequireEmployee></RequireAuth>
-          } />
+          {/* 임시 수정 */}
+          <Route element={<AppLayout />}>
+
+            {/* 관리자 페이지 */}
+            <Route path="/admin/dashboard" element={
+              <RequireAdmin><AdminDashboardPage /></RequireAdmin>
+            } />
+            <Route path="/admin/employees" element={
+              <RequireAdmin><AdminEmployeesPage /></RequireAdmin>
+            } />
+            <Route path="/admin/shift-types" element={
+              <RequireAdmin><AdminShiftTypesPage /></RequireAdmin>
+            } />
+            <Route path="/admin/schedules" element={
+              <RequireAdmin><AdminSchedulesPage /></RequireAdmin>
+            } />
+            <Route path="/admin/requests" element={
+              <RequireAdmin><AdminRequestsPage /></RequireAdmin>
+            } />
+
+            {/* 직원 페이지 */}
+            <Route path="/employee/dashboard" element={
+              <RequireEmployee><EmployeeDashboardPage /></RequireEmployee>
+            } />
+            <Route path="/employee/schedules" element={
+              <RequireEmployee><EmployeeSchedulesPage /></RequireEmployee>
+            } />
+            <Route path="/employee/requests" element={
+              <RequireEmployee><EmployeeRequestsPage /></RequireEmployee>
+            } />
+            <Route path="/employee/swap-requests" element={
+              <RequireEmployee><EmployeeSwapRequestsPage /></RequireEmployee>
+            } />
+            <Route path="/employee/swap-requests/:id" element={
+              <RequireEmployee><EmployeeSwapRequestDetailPage /></RequireEmployee>
+            } />
+
+          </Route>
 
           {/* 기본 리다이렉트 */}
           <Route path="/" element={<RootRedirect />} />
