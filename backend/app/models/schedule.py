@@ -1,5 +1,7 @@
-from sqlalchemy import Column, Integer, Boolean, Date, ForeignKey, TIMESTAMP, UniqueConstraint
+from sqlalchemy import Boolean, Column, Date, ForeignKey, Integer, TIMESTAMP, UniqueConstraint
+from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
+
 from app.core.database import Base
 
 
@@ -13,5 +15,21 @@ class Schedule(Base):
     shift_type_id = Column(Integer, ForeignKey("shift_types.shift_type_id"), nullable=False)
     is_locked = Column(Boolean, nullable=False, default=False)
     version = Column(Integer, nullable=False, default=0)
+    is_deleted = Column(Boolean, nullable=False, default=False)
     created_at = Column(TIMESTAMP(timezone=True), nullable=False, server_default=func.now())
     updated_at = Column(TIMESTAMP(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
+
+    user = relationship("User")
+    shift_type = relationship("ShiftType")
+
+
+class SchedulePeriod(Base):
+    __tablename__ = "schedule_periods"
+    __table_args__ = (UniqueConstraint("year", "month", name="uq_schedule_periods_year_month"),)
+
+    period_id = Column(Integer, primary_key=True, autoincrement=True)
+    year = Column(Integer, nullable=False)
+    month = Column(Integer, nullable=False)
+    status = Column(Boolean, nullable=False, default=True)
+    confirmed_at = Column(TIMESTAMP(timezone=True), nullable=True)
+    confirmed_by = Column(Integer, ForeignKey("users.user_id"), nullable=True)
