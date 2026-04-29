@@ -113,7 +113,7 @@ function ShiftCell({
   );
 }
 
-export default function SchedulePage() {
+export default function SchedulesPage() {
   const [schedules, setSchedules] = useState(() =>
     JSON.parse(JSON.stringify(aprilSchedules))
   );
