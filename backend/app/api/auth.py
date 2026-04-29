@@ -7,6 +7,8 @@ from app.core.security import (
     verify_password, 
     create_access_token,
 )
+
+from app.dependencies.auth import get_current_user
 from app.dependencies.database import get_db
 
 router = APIRouter(tags=["auth"])
@@ -44,6 +46,8 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
         }
     }
 
-# TODO: POST /api/auth/logout
+@router.post("/logout")
+def logout(current_user: User = Depends(get_current_user)):
+    return {"message": "로그아웃 되었습니다. 클라이언트의 인증 정보를 삭제하세요."}
 # TODO: GET  /api/auth/me
 # TODO: PUT  /api/auth/password
