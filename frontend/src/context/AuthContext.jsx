@@ -1,37 +1,17 @@
-import { createContext, useContext, useState } from 'react'
+import { createContext, useContext } from "react";
 
-const AuthContext = createContext(null)
+const AuthContext = createContext();
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(() => {
-    const saved = localStorage.getItem('user')
-    return saved ? JSON.parse(saved) : null
-  })
-  const [token, setToken] = useState(() => localStorage.getItem('token'))
-
-  function login(userData, accessToken) {
-    setUser(userData)
-    setToken(accessToken)
-    localStorage.setItem('user', JSON.stringify(userData))
-    localStorage.setItem('token', accessToken)
-  }
-
-  function logout() {
-    setUser(null)
-    setToken(null)
-    localStorage.removeItem('user')
-    localStorage.removeItem('token')
-  }
+  const user = { name: "test" }; // 임시 데이터
 
   return (
-    <AuthContext.Provider value={{ user, token, login, logout }}>
+    <AuthContext.Provider value={{ user }}>
       {children}
     </AuthContext.Provider>
-  )
+  );
 }
 
 export function useAuth() {
-  const ctx = useContext(AuthContext)
-  if (!ctx) throw new Error('useAuth must be used within AuthProvider')
-  return ctx
+  return useContext(AuthContext);
 }
