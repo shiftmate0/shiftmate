@@ -33,7 +33,7 @@ const colorPresets = [
   "#6366F1",
 ];
 
-export default function ShiftTypesPage() {
+export default function ShiftTypes() {
   const [types, setTypes] = useState(shiftTypes);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -123,7 +123,12 @@ export default function ShiftTypesPage() {
     if (editing) {
       setTypes((prev) =>
         prev.map((item) =>
-          item.id === editing.id ? { ...item, ...normalizedForm } : item
+          item.id === editing.id
+            ? {
+                ...item,
+                ...normalizedForm,
+              }
+            : item
         )
       );
     } else {
@@ -159,7 +164,10 @@ export default function ShiftTypesPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <h1 className="font-bold text-slate-800" style={{ fontSize: 24 }}>
+          <h1
+            className="font-bold text-slate-800"
+            style={{ fontSize: 24 }}
+          >
             근무 유형 관리
           </h1>
           <p className="mt-1 text-sm text-slate-500">
@@ -266,7 +274,9 @@ export default function ShiftTypesPage() {
                     {item.startTime} ~ {item.endTime}
                   </span>
                 ) : (
-                  <span className="text-xs text-slate-400">시간 없음</span>
+                  <span className="text-xs text-slate-400">
+                    시간 없음
+                  </span>
                 )}
 
                 <span className="flex items-center gap-1.5 text-xs">
@@ -314,7 +324,9 @@ export default function ShiftTypesPage() {
         className="rounded-2xl p-4 text-sm"
         style={{ background: "#EFF6FF", border: "1px solid #BFDBFE" }}
       >
-        <p className="mb-1 font-medium text-blue-700">근무 코드 안내</p>
+        <p className="mb-1 font-medium text-blue-700">
+          근무 코드 안내
+        </p>
         <p className="text-xs leading-relaxed text-blue-600">
           OFF와 VAC는 시스템 예약 코드입니다. 동일 코드는 중복 등록할 수
           없으며, 실제 백엔드 연결 후에는 사용 중인 근무 코드는 삭제할 수
@@ -326,7 +338,10 @@ export default function ShiftTypesPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
           <div className="w-full max-w-[480px] rounded-2xl bg-white p-6 shadow-2xl">
             <div className="mb-5 flex items-center justify-between">
-              <h2 className="font-bold text-slate-800" style={{ fontSize: 18 }}>
+              <h2
+                className="font-bold text-slate-800"
+                style={{ fontSize: 18 }}
+              >
                 {editing ? "근무 유형 수정" : "근무 유형 추가"}
               </h2>
 
@@ -372,7 +387,9 @@ export default function ShiftTypesPage() {
                   <input
                     type="text"
                     value={form.label}
-                    onChange={(event) => updateForm("label", event.target.value)}
+                    onChange={(event) =>
+                      updateForm("label", event.target.value)
+                    }
                     placeholder="예: 주간, 야간"
                     className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm transition-all focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
                   />
@@ -436,7 +453,9 @@ export default function ShiftTypesPage() {
                   <input
                     type="color"
                     value={form.color}
-                    onChange={(event) => updateForm("color", event.target.value)}
+                    onChange={(event) =>
+                      updateForm("color", event.target.value)
+                    }
                     className="h-8 w-8 cursor-pointer rounded-lg border border-slate-200"
                   />
                 </div>
@@ -504,7 +523,10 @@ export default function ShiftTypesPage() {
       {deleteConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
           <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl">
-            <h2 className="mb-2 font-bold text-slate-800" style={{ fontSize: 18 }}>
+            <h2
+              className="mb-2 font-bold text-slate-800"
+              style={{ fontSize: 18 }}
+            >
               근무 유형 삭제
             </h2>
 
@@ -514,8 +536,8 @@ export default function ShiftTypesPage() {
               </strong>
               을 삭제하시겠습니까?
               <br />
-              실제 서버 연결 후에는 해당 코드를 사용하는 스케줄이 있으면 삭제할
-              수 없습니다.
+              실제 서버 연결 후에는 해당 코드를 사용하는 스케줄이 있으면
+              삭제할 수 없습니다.
             </p>
 
             <div className="flex gap-3">
