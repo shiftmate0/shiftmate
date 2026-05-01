@@ -8,8 +8,8 @@ class User(Base):
     __tablename__ = "users"
 
     user_id = Column(Integer, primary_key=True, autoincrement=True)
-    name = Column(String(50), nullable=False)
-    employee_no = Column(String(30), unique=True, nullable=False)
+    name = Column(String(100), nullable=False)
+    employee_no = Column(String(50), unique=True, nullable=False)
     role = Column(Enum("admin", "employee", name="user_role"), nullable=False)
     years_of_experience = Column(Integer, nullable=False, default=0)
     is_active = Column(Boolean, nullable=False, default=True)

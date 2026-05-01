@@ -1,4 +1,3 @@
-from app.models.employee_acceptance import EmployeeAcceptance
 from app.models.schedule import Schedule
 from app.models.schedule_period import SchedulePeriod
 from app.models.shift_type import ShiftType

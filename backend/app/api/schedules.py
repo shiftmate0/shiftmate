@@ -245,22 +245,6 @@ def update_schedule(
     schedule.shift_type_id = body.shift_type_id
     schedule.version += 1
 
-    # 확정 후 수정 시 해당 직원 수락 무효화
-    from app.models.employee_acceptance import EmployeeAcceptance
-    work_date = schedule.work_date
-    acceptance = db.query(EmployeeAcceptance).filter(
-        EmployeeAcceptance.user_id == schedule.user_id,
-        EmployeeAcceptance.year == work_date.year,
-        EmployeeAcceptance.month == work_date.month,
-    ).first()
-    if acceptance:
-        acceptance.is_valid = False
-
-    # 변경 이력 기록 (schedule_logs)
-    # NOTE: 팀장 담당 테이블이므로 import 후 사용
-    # from app.models.schedule_log import ScheduleLog
-    # db.add(ScheduleLog(...))
-
     db.commit()
     db.refresh(schedule)
 
