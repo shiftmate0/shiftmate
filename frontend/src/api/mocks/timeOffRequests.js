@@ -1,3 +1,5 @@
+// frontend/src/api/mocks/timeOffRequests.js
+
 // ── 직원용: 내 요청 목록 (GET /api/requests/me) ──────────────
 // snake_case — API 응답 형식과 동일
 export const mockTimeOffRequests = [
@@ -175,3 +177,7 @@ export const mockAdminSwapRequests = [
     expires_at: '2026-04-14T08:00:00Z',
   },
 ]
+
+export function getMyTimeOffRequests() {
+  return Promise.resolve(mockTimeOffRequests)
+}

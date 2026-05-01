@@ -70,3 +70,5 @@ desktop.ini
 # Venv/Node_modules
 /venv/
 /node_modules/
+
+.claude/
