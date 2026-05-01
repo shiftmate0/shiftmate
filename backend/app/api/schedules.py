@@ -198,6 +198,7 @@ def update_schedule(
     schedule.shift_type_id = body.shift_type_id
     schedule.version = (schedule.version or 0) + 1
     schedule.updated_at = datetime.now()
+
     db.commit()
     db.refresh(schedule)
 
