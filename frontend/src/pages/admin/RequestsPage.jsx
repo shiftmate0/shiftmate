@@ -1,204 +1,465 @@
-import { useState } from 'react'
-import { Search, ChevronDown, Check, X } from 'lucide-react'
-import { timeOffRequests as mockTimeOffRequests, swapRequests as mockSwapRequests } from '../../api/mocks/mockData'
+import { useState, useEffect } from 'react'
+import { formatDistanceToNow } from 'date-fns'
+import { ko } from 'date-fns/locale'
+import { RefreshCw, CheckCircle, AlertCircle, ChevronDown } from 'lucide-react'
+import { mockAdminTimeOffRequests, mockAdminSwapRequests } from '../../api/mocks/timeOffRequests'
 
 // ── 실제 API로 교체할 때 ────────────────────────────────────
 // import apiClient from '../../api/client'
-// GET  /admin/requests          → 휴무·휴가 전체 목록
-// PATCH /admin/requests/:id/approve → 승인
-// PATCH /admin/requests/:id/reject  → 반려
-// GET  /api/swap-requests       → 교대 요청 목록 (팀장 API)
-// PATCH /admin/swap-requests/:id/approve → 교대 최종 승인 (팀장 API)
-// PATCH /admin/swap-requests/:id/reject  → 교대 반려 (팀장 API)
+// GET  /admin/requests?status=&type=
+// PATCH /admin/requests/:id/approve  { admin_comment }
+// PATCH /admin/requests/:id/reject   { admin_comment }
+// GET  /swap-requests (팀장 API)
+// PATCH /admin/swap-requests/:id/approve → 409: "처리 중 충돌이 발생했습니다. 다시 시도해 주세요"
+// PATCH /admin/swap-requests/:id/reject  { reason }
 // ──────────────────────────────────────────────────────────
 
-// ── 상태 배지 스타일 ──────────────────────────────────────
-const statusConfig = {
-  pending:  { label: '대기',   bg: '#FEF3C7', text: '#D97706' },
-  approved: { label: '승인',   bg: '#ECFDF5', text: '#059669' },
-  rejected: { label: '반려',   bg: '#FEF2F2', text: '#DC2626' },
-  accepted: { label: '합의됨', bg: '#EFF6FF', text: '#3B82F6' },
-  expired:  { label: '만료',   bg: '#F8FAFC', text: '#94A3B8' },
+const STATUS_CONFIG = {
+  pending:  { label: '대기 중', bg: '#FEF3C7', text: '#D97706' },
+  approved: { label: '승인됨',  bg: '#ECFDF5', text: '#059669' },
+  rejected: { label: '반려됨',  bg: '#FEF2F2', text: '#DC2626' },
+  accepted: { label: '합의됨',  bg: '#EFF6FF', text: '#3B82F6' },
+  expired:  { label: '만료됨',  bg: '#F8FAFC', text: '#94A3B8' },
 }
 
-// ── 유형 배지 스타일 ──────────────────────────────────────
-const typeConfig = {
+const TYPE_CONFIG = {
   OFF: { label: '휴무', bg: '#EFF6FF', text: '#3B82F6' },
   VAC: { label: '휴가', bg: '#ECFDF5', text: '#059669' },
 }
 
-// ── 상태 배지 컴포넌트 ────────────────────────────────────
-const StatusBadge = ({ status }) => {
-  const sc = statusConfig[status] ?? statusConfig.pending
-  return (
-    <span
-      className="inline-flex items-center text-xs font-medium px-2.5 py-1 rounded-full"
-      style={{ background: sc.bg, color: sc.text }}
-    >
-      {sc.label}
-    </span>
-  )
+const STATUS_TABS = [
+  { key: 'pending',  label: '대기 중' },
+  { key: 'approved', label: '승인됨' },
+  { key: 'rejected', label: '반려됨' },
+  { key: '',         label: '전체' },
+]
+
+const TYPE_OPTIONS = [
+  { value: '',     label: '전체' },
+  { value: 'OFF',  label: '휴무 (OFF)' },
+  { value: 'VAC',  label: '휴가 (VAC)' },
+  { value: 'SWAP', label: '교대 요청' },
+]
+
+function formatMD(dateStr) {
+  const [, m, d] = dateStr.split('-')
+  return `${parseInt(m)}/${parseInt(d)}`
+}
+
+function formatDateRange(start, end) {
+  if (!start) return '-'
+  if (start === end) return formatMD(start)
+  return `${formatMD(start)}~${formatMD(end)}`
 }
 
 export default function AdminRequestsPage() {
-  const [activeTab, setActiveTab] = useState('timeoff') // 'timeoff' | 'swap'
-  const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState('all')
-  const [showStatusDropdown, setShowStatusDropdown] = useState(false)
+  const [activeStatus, setActiveStatus] = useState('pending')
+  const [typeFilter, setTypeFilter]     = useState('')
+  const [showTypeDropdown, setShowTypeDropdown] = useState(false)
 
-  // Mock 데이터를 state로 관리 (승인/반려 시 즉시 반영)
-  const [timeOffList, setTimeOffList] = useState(mockTimeOffRequests)
-  const [swapList, setSwapList] = useState(mockSwapRequests)
+  const [timeOffList, setTimeOffList] = useState([])
+  const [swapList, setSwapList]       = useState([])
 
-  // ── 휴무·휴가 승인 ────────────────────────────────────
-  const handleApproveTimeOff = (id) => {
-    // ── 실제 API 연결 시 교체 ──────────────────────────
-    // await apiClient.patch(`/admin/requests/${id}/approve`, { admin_comment: '승인합니다.' })
-    // ──────────────────────────────────────────────────
-    setTimeOffList((prev) =>
-      prev.map((r) =>
-        r.id === id ? { ...r, status: 'approved', adminComment: '승인합니다.' } : r
-      )
-    )
+  // 휴무·휴가 상세 모달
+  const [detailItem, setDetailItem]     = useState(null)
+  const [adminComment, setAdminComment] = useState('')
+
+  // 교대 승인 확인 모달
+  const [swapApproveTarget, setSwapApproveTarget] = useState(null)
+
+  // 교대 반려 모달
+  const [swapRejectTarget, setSwapRejectTarget] = useState(null)
+  const [swapRejectReason, setSwapRejectReason] = useState('')
+
+  const [toast, setToast] = useState(null)
+
+  const fetchAll = () => {
+    // ── 실제 API 교체 시 ──────────────────────────────────
+    // const [toRes, swapRes] = await Promise.all([
+    //   apiClient.get('/admin/requests'),
+    //   apiClient.get('/swap-requests'),
+    // ])
+    // setTimeOffList(toRes.data)
+    // setSwapList(swapRes.data)
+    // ─────────────────────────────────────────────────────
+    setTimeOffList([...mockAdminTimeOffRequests])
+    setSwapList([...mockAdminSwapRequests])
   }
 
-  // ── 휴무·휴가 반려 ────────────────────────────────────
-  const handleRejectTimeOff = (id) => {
-    // ── 실제 API 연결 시 교체 ──────────────────────────
-    // await apiClient.patch(`/admin/requests/${id}/reject`, { admin_comment: '반려합니다.' })
-    // ──────────────────────────────────────────────────
-    setTimeOffList((prev) =>
-      prev.map((r) =>
-        r.id === id ? { ...r, status: 'rejected', adminComment: '반려합니다.' } : r
-      )
-    )
+  useEffect(() => { fetchAll() }, [])
+
+  const showToast = (msg, ok = true) => {
+    setToast({ msg, ok })
+    setTimeout(() => setToast(null), 3000)
   }
 
-  // ── 교대 승인 (팀장 API 연결 전 준비 중) ───────────────
-  const handleApproveSwap = (id) => {
-    // ⚠️ 팀장 API 완성 후 교체 예정
-    // await apiClient.patch(`/admin/swap-requests/${id}/approve`, { change_reason: '승인' })
-    alert('팀장 API 연결 후 동작합니다.')
-  }
-
-  // ── 교대 반려 (팀장 API 연결 전 준비 중) ───────────────
-  const handleRejectSwap = (id) => {
-    // ⚠️ 팀장 API 완성 후 교체 예정
-    alert('팀장 API 연결 후 동작합니다.')
-  }
-
-  // ── 필터링 ────────────────────────────────────────────
+  // ── 필터링 ─────────────────────────────────────────────
   const filteredTimeOff = timeOffList.filter((r) => {
-    const matchSearch = r.requesterName.includes(search)
-    const matchStatus = statusFilter === 'all' || r.status === statusFilter
-    return matchSearch && matchStatus
+    const matchStatus = activeStatus === '' || r.status === activeStatus
+    const matchType   = typeFilter === '' || typeFilter === 'SWAP'
+      ? typeFilter !== 'SWAP'
+      : r.type === typeFilter
+    return matchStatus && matchType
   })
 
   const filteredSwap = swapList.filter((r) => {
-    const matchSearch = r.requesterName.includes(search)
-    const matchStatus = statusFilter === 'all' || r.status === statusFilter
-    return matchSearch && matchStatus
+    const matchStatus = activeStatus === '' || r.status === activeStatus
+    const showSwap    = typeFilter === '' || typeFilter === 'SWAP'
+    return matchStatus && showSwap
   })
 
-  // ── 탭별 대기 건수 ────────────────────────────────────
-  const timeOffPending = timeOffList.filter((r) => r.status === 'pending').length
-  const swapPending = swapList.filter((r) =>
-    r.status === 'pending' || r.status === 'accepted'
-  ).length
+  const pendingTimeOff = timeOffList.filter((r) => r.status === 'pending').length
+  const pendingSwap    = swapList.filter((r) => ['pending', 'accepted'].includes(r.status)).length
+  const pendingTotal   = pendingTimeOff + pendingSwap
 
-  const statusOptions = [
-    { value: 'all', label: '전체 상태' },
-    { value: 'pending', label: '대기' },
-    { value: 'approved', label: '승인' },
-    { value: 'rejected', label: '반려' },
-  ]
+  const tabCounts = {
+    pending:  pendingTotal,
+    approved: timeOffList.filter((r) => r.status === 'approved').length,
+    rejected: timeOffList.filter((r) => r.status === 'rejected').length,
+    '':       timeOffList.length + swapList.length,
+  }
+
+  // ── 휴무·휴가 승인 ─────────────────────────────────────
+  const handleApprove = async (item) => {
+    // ── 실제 API 교체 시: await apiClient.patch(`/admin/requests/${item.request_id}/approve`, { admin_comment: adminComment || null })
+    setTimeOffList((prev) =>
+      prev.map((r) =>
+        r.request_id === item.request_id
+          ? { ...r, status: 'approved', admin_comment: adminComment || null, processed_at: new Date().toISOString() }
+          : r
+      )
+    )
+    setDetailItem(null)
+    setAdminComment('')
+    showToast(item.type === 'VAC'
+      ? '휴가 신청이 승인되었습니다 (근무표에 VAC가 자동 배정되었습니다)'
+      : '휴무 신청이 승인되었습니다')
+  }
+
+  // ── 휴무·휴가 반려 ─────────────────────────────────────
+  const handleReject = async (item) => {
+    if (!adminComment.trim()) {
+      showToast('반려 사유를 입력해주세요', false)
+      return
+    }
+    // ── 실제 API 교체 시: await apiClient.patch(`/admin/requests/${item.request_id}/reject`, { admin_comment: adminComment })
+    setTimeOffList((prev) =>
+      prev.map((r) =>
+        r.request_id === item.request_id
+          ? { ...r, status: 'rejected', admin_comment: adminComment, processed_at: new Date().toISOString() }
+          : r
+      )
+    )
+    setDetailItem(null)
+    setAdminComment('')
+    showToast('신청이 반려되었습니다')
+  }
+
+  const openDetail = (item) => {
+    setDetailItem(item)
+    setAdminComment('')
+  }
+
+  // ── 교대 최종 승인 ─────────────────────────────────────
+  const confirmSwapApprove = async () => {
+    const req = swapApproveTarget
+    try {
+      // ── 실제 API 교체 시: await apiClient.patch(`/admin/swap-requests/${req.swap_request_id}/approve`)
+      setSwapList((prev) =>
+        prev.map((r) =>
+          r.swap_request_id === req.swap_request_id
+            ? { ...r, status: 'approved' }
+            : r
+        )
+      )
+      setSwapApproveTarget(null)
+      showToast('교대 신청이 최종 승인되었습니다')
+    } catch (err) {
+      if (err?.response?.status === 409) {
+        showToast('처리 중 충돌이 발생했습니다. 다시 시도해 주세요', false)
+      } else {
+        showToast('오류가 발생했습니다', false)
+      }
+      setSwapApproveTarget(null)
+    }
+  }
+
+  // ── 교대 반려 ──────────────────────────────────────────
+  const confirmSwapReject = async () => {
+    if (!swapRejectReason.trim()) {
+      showToast('반려 사유를 입력해주세요', false)
+      return
+    }
+    const req = swapRejectTarget
+    // ── 실제 API 교체 시: await apiClient.patch(`/admin/swap-requests/${req.swap_request_id}/reject`, { reason: swapRejectReason })
+    setSwapList((prev) =>
+      prev.map((r) =>
+        r.swap_request_id === req.swap_request_id
+          ? { ...r, status: 'rejected' }
+          : r
+      )
+    )
+    setSwapRejectTarget(null)
+    setSwapRejectReason('')
+    showToast('교대 신청이 반려되었습니다')
+  }
+
+  const showOnlySwap = typeFilter === 'SWAP'
+  const showOnlyOff  = typeFilter !== '' && typeFilter !== 'SWAP'
+  const totalCount   = showOnlySwap
+    ? filteredSwap.length
+    : showOnlyOff
+      ? filteredTimeOff.length
+      : filteredTimeOff.length + filteredSwap.length
 
   return (
     <div className="space-y-6">
 
-      {/* ── 페이지 타이틀 ───────────────────────────────────── */}
+      {/* ── Toast ─────────────────────────────────────────────── */}
+      {toast && (
+        <div
+          className="fixed top-5 right-5 z-50 flex items-center gap-2 px-4 py-3 rounded-xl shadow-lg text-sm font-medium"
+          style={{
+            background: toast.ok ? '#ECFDF5' : '#FEF2F2',
+            color:      toast.ok ? '#059669' : '#DC2626',
+            border:     `1px solid ${toast.ok ? '#A7F3D0' : '#FECACA'}`,
+          }}
+        >
+          {toast.ok ? <CheckCircle size={16} /> : <AlertCircle size={16} />}
+          {toast.msg}
+        </div>
+      )}
+
+      {/* ── 교대 최종 승인 확인 모달 ──────────────────────────── */}
+      {swapApproveTarget && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30">
+          <div className="bg-white rounded-2xl p-6 w-[400px] shadow-xl">
+            <h3 className="font-semibold text-slate-800 mb-2" style={{ fontSize: 16 }}>
+              교대 최종 승인
+            </h3>
+            <p className="text-sm text-slate-600 mb-1">
+              {swapApproveTarget.requester_name} {swapApproveTarget.shift_code} ↕{' '}
+              {swapApproveTarget.proposer_name} {swapApproveTarget.proposer_shift_code}
+            </p>
+            <p className="text-sm font-medium text-slate-700 mb-6">
+              이 교대를 최종 승인하시겠습니까?
+            </p>
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => setSwapApproveTarget(null)}
+                className="px-4 py-2 rounded-lg text-sm text-slate-500 hover:bg-slate-100 transition-colors"
+              >
+                취소
+              </button>
+              <button
+                onClick={confirmSwapApprove}
+                className="px-4 py-2 rounded-lg text-sm font-medium text-white"
+                style={{ background: '#3B82F6' }}
+              >
+                최종 승인
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── 교대 반려 모달 ────────────────────────────────────── */}
+      {swapRejectTarget && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30">
+          <div className="bg-white rounded-2xl p-6 w-[400px] shadow-xl">
+            <h3 className="font-semibold text-slate-800 mb-4" style={{ fontSize: 16 }}>
+              교대 반려
+            </h3>
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                반려 사유 (필수)
+              </label>
+              <textarea
+                value={swapRejectReason}
+                onChange={(e) => setSwapRejectReason(e.target.value)}
+                placeholder="반려 사유를 입력해주세요"
+                rows={3}
+                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm text-slate-700 focus:outline-none focus:border-blue-400 resize-none"
+              />
+            </div>
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => { setSwapRejectTarget(null); setSwapRejectReason('') }}
+                className="px-4 py-2 rounded-lg text-sm text-slate-500 hover:bg-slate-100 transition-colors"
+              >
+                취소
+              </button>
+              <button
+                onClick={confirmSwapReject}
+                className="px-4 py-2 rounded-lg text-sm font-medium text-white"
+                style={{ background: '#EF4444' }}
+              >
+                반려 확정
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── 요청 상세 모달 ──────────────────────────────────── */}
+      {detailItem && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30">
+          <div className="bg-white rounded-2xl p-6 w-[480px] shadow-xl">
+            <h3 className="font-semibold text-slate-800 mb-4" style={{ fontSize: 16 }}>
+              요청 상세
+            </h3>
+
+            <div className="space-y-3 mb-5 p-4 bg-slate-50 rounded-xl text-sm">
+              <div className="flex justify-between">
+                <span className="text-slate-500">신청자</span>
+                <span className="font-medium text-slate-800">{detailItem.requester_name}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">유형</span>
+                <span
+                  className="text-xs font-medium px-2.5 py-1 rounded-full"
+                  style={{ background: TYPE_CONFIG[detailItem.type]?.bg, color: TYPE_CONFIG[detailItem.type]?.text }}
+                >
+                  {TYPE_CONFIG[detailItem.type]?.label ?? detailItem.type}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">기간</span>
+                <span className="font-medium text-slate-800">
+                  {formatDateRange(detailItem.start_date, detailItem.end_date)}
+                </span>
+              </div>
+              {detailItem.reason && (
+                <div className="flex justify-between">
+                  <span className="text-slate-500">사유</span>
+                  <span className="text-slate-700 text-right max-w-[260px]">{detailItem.reason}</span>
+                </div>
+              )}
+              <div className="flex justify-between">
+                <span className="text-slate-500">상태</span>
+                <span
+                  className="text-xs font-medium px-2.5 py-1 rounded-full"
+                  style={{ background: STATUS_CONFIG[detailItem.status]?.bg, color: STATUS_CONFIG[detailItem.status]?.text }}
+                >
+                  {STATUS_CONFIG[detailItem.status]?.label}
+                </span>
+              </div>
+              {detailItem.admin_comment && (
+                <div className="flex justify-between">
+                  <span className="text-slate-500">관리자 코멘트</span>
+                  <span className="text-slate-700 text-right max-w-[260px]">{detailItem.admin_comment}</span>
+                </div>
+              )}
+            </div>
+
+            {detailItem.status === 'pending' ? (
+              <>
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                    관리자 코멘트 (반려 시 필수)
+                  </label>
+                  <textarea
+                    value={adminComment}
+                    onChange={(e) => setAdminComment(e.target.value)}
+                    placeholder="승인/반려 사유를 입력해주세요"
+                    rows={3}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm text-slate-700 focus:outline-none focus:border-blue-400 resize-none"
+                  />
+                </div>
+                <div className="flex gap-2 justify-end">
+                  <button
+                    onClick={() => setDetailItem(null)}
+                    className="px-4 py-2 rounded-lg text-sm text-slate-500 hover:bg-slate-100 transition-colors"
+                  >
+                    닫기
+                  </button>
+                  <button
+                    onClick={() => handleReject(detailItem)}
+                    className="px-4 py-2 rounded-lg text-sm font-medium text-white"
+                    style={{ background: '#EF4444' }}
+                  >
+                    반려
+                  </button>
+                  <button
+                    onClick={() => handleApprove(detailItem)}
+                    className="px-4 py-2 rounded-lg text-sm font-medium text-white"
+                    style={{ background: '#3B82F6' }}
+                  >
+                    승인
+                  </button>
+                </div>
+              </>
+            ) : (
+              <div className="flex justify-end">
+                <button
+                  onClick={() => setDetailItem(null)}
+                  className="px-4 py-2 rounded-lg text-sm text-slate-500 hover:bg-slate-100 transition-colors"
+                >
+                  닫기
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── 페이지 타이틀 ─────────────────────────────────────── */}
       <div>
-        <h1 className="font-bold text-slate-800" style={{ fontSize: 24 }}>
-          요청 관리
-        </h1>
+        <h1 className="font-bold text-slate-800" style={{ fontSize: 24 }}>요청 관리</h1>
         <p className="text-slate-500 text-sm mt-0.5">
           휴무·휴가·교대 요청을 검토하고 승인 또는 반려합니다.
         </p>
       </div>
 
-      {/* ── 탭 ──────────────────────────────────────────────── */}
+      {/* ── 상태 탭 ────────────────────────────────────────────── */}
       <div className="flex gap-0 border-b border-slate-200">
-        <button
-          onClick={() => setActiveTab('timeoff')}
-          className="flex items-center gap-2 px-5 py-3 text-sm font-medium border-b-2 transition-colors"
-          style={{
-            borderColor: activeTab === 'timeoff' ? '#3B82F6' : 'transparent',
-            color: activeTab === 'timeoff' ? '#3B82F6' : '#94A3B8',
-          }}
-        >
-          휴무·휴가 요청
-          {timeOffPending > 0 && (
-            <span className="text-xs px-1.5 py-0.5 rounded-full bg-blue-500 text-white">
-              {timeOffPending}
-            </span>
-          )}
-        </button>
-        <button
-          onClick={() => setActiveTab('swap')}
-          className="flex items-center gap-2 px-5 py-3 text-sm font-medium border-b-2 transition-colors"
-          style={{
-            borderColor: activeTab === 'swap' ? '#3B82F6' : 'transparent',
-            color: activeTab === 'swap' ? '#3B82F6' : '#94A3B8',
-          }}
-        >
-          교대 요청
-          {swapPending > 0 && (
-            <span className="text-xs px-1.5 py-0.5 rounded-full bg-blue-500 text-white">
-              {swapPending}
-            </span>
-          )}
-        </button>
+        {STATUS_TABS.map((tab) => {
+          const count = tabCounts[tab.key] ?? 0
+          const active = activeStatus === tab.key
+          return (
+            <button
+              key={tab.key}
+              onClick={() => setActiveStatus(tab.key)}
+              className="flex items-center gap-2 px-5 py-3 text-sm font-medium border-b-2 transition-colors"
+              style={{
+                borderColor: active ? '#3B82F6' : 'transparent',
+                color:       active ? '#3B82F6' : '#94A3B8',
+              }}
+            >
+              {tab.label}
+              {count > 0 && (
+                <span
+                  className="text-xs px-1.5 py-0.5 rounded-full text-white"
+                  style={{ background: active ? '#3B82F6' : '#94A3B8' }}
+                >
+                  {count}
+                </span>
+              )}
+            </button>
+          )
+        })}
       </div>
 
-      {/* ── 검색 + 필터 ─────────────────────────────────────── */}
+      {/* ── 유형 필터 ─────────────────────────────────────────── */}
       <div className="flex items-center gap-3">
-        {/* 검색 */}
-        <div className="relative flex-1 max-w-xs">
-          <Search
-            size={15}
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-          />
-          <input
-            type="text"
-            placeholder="이름으로 검색"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-700 focus:outline-none focus:border-blue-400"
-          />
-        </div>
-
-        {/* 상태 필터 드롭다운 */}
         <div className="relative">
           <button
-            onClick={() => setShowStatusDropdown(!showStatusDropdown)}
+            onClick={() => setShowTypeDropdown(!showTypeDropdown)}
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-600 bg-white hover:bg-slate-50"
           >
-            {statusOptions.find((o) => o.value === statusFilter)?.label}
+            {TYPE_OPTIONS.find((o) => o.value === typeFilter)?.label ?? '전체'}
             <ChevronDown size={14} />
           </button>
-          {showStatusDropdown && (
-            <div className="absolute right-0 top-11 w-36 bg-white rounded-xl border border-slate-200 shadow-lg z-10 overflow-hidden">
-              {statusOptions.map((opt) => (
+          {showTypeDropdown && (
+            <div className="absolute left-0 top-11 w-36 bg-white rounded-xl border border-slate-200 shadow-lg z-10 overflow-hidden">
+              {TYPE_OPTIONS.map((opt) => (
                 <button
                   key={opt.value}
-                  onClick={() => {
-                    setStatusFilter(opt.value)
-                    setShowStatusDropdown(false)
-                  }}
+                  onClick={() => { setTypeFilter(opt.value); setShowTypeDropdown(false) }}
                   className="w-full text-left px-4 py-2.5 text-sm text-slate-600 hover:bg-slate-50 transition-colors"
                   style={{
-                    fontWeight: statusFilter === opt.value ? 600 : 400,
-                    color: statusFilter === opt.value ? '#3B82F6' : undefined,
+                    fontWeight: typeFilter === opt.value ? 600 : 400,
+                    color:      typeFilter === opt.value ? '#3B82F6' : undefined,
                   }}
                 >
                   {opt.label}
@@ -207,251 +468,174 @@ export default function AdminRequestsPage() {
             </div>
           )}
         </div>
+        <span className="text-xs text-slate-400">{totalCount}건</span>
       </div>
 
-      {/* ══════════════════════════════════════════════════════
-          휴무·휴가 요청 탭
-      ══════════════════════════════════════════════════════ */}
-      {activeTab === 'timeoff' && (
-        <div
-          className="bg-white rounded-2xl border border-slate-200 overflow-hidden"
-          style={{ boxShadow: '0 4px 20px rgba(0,0,0,0.06)' }}
-        >
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-slate-100">
-                {['신청자', '유형', '기간', '사유', '상태', '신청일', '작업'].map((h) => (
-                  <th
-                    key={h}
-                    className="text-left px-5 py-4 text-xs font-semibold text-slate-500"
-                  >
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {filteredTimeOff.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="text-center py-12 text-sm text-slate-400">
-                    요청 내역이 없습니다.
-                  </td>
-                </tr>
-              ) : (
-                filteredTimeOff.map((req) => {
-                  const tc = typeConfig[req.type] ?? typeConfig.OFF
-                  const dateStr =
-                    req.startDate === req.endDate
-                      ? req.startDate
-                      : `${req.startDate} ~ ${req.endDate}`
+      {/* ── 요청 목록 ─────────────────────────────────────────── */}
+      <div
+        className="bg-white rounded-2xl border border-slate-200 overflow-hidden"
+        style={{ boxShadow: '0 4px 20px rgba(0,0,0,0.06)' }}
+      >
+        <table className="w-full">
+          <thead>
+            <tr className="border-b border-slate-100">
+              {['신청자', '유형', '기간', '사유', '상태', '신청일', '작업'].map((h) => (
+                <th key={h} className="text-left px-5 py-4 text-xs font-semibold text-slate-500">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
 
-                  return (
-                    <tr
-                      key={req.id}
-                      className="border-b border-slate-50 hover:bg-slate-50 transition-colors"
-                    >
-                      {/* 신청자 */}
-                      <td className="px-5 py-4">
-                        <div className="flex items-center gap-2.5">
-                          <div
-                            className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
-                            style={{ background: '#3B82F6' }}
-                          >
-                            {req.requesterName.charAt(0)}
-                          </div>
-                          <span className="text-sm font-medium text-slate-700">
-                            {req.requesterName}
-                          </span>
-                        </div>
-                      </td>
-
-                      {/* 유형 */}
-                      <td className="px-5 py-4">
-                        <span
-                          className="text-xs font-medium px-2.5 py-1 rounded-full"
-                          style={{ background: tc.bg, color: tc.text }}
-                        >
-                          {tc.label}
-                        </span>
-                      </td>
-
-                      {/* 기간 */}
-                      <td className="px-5 py-4 text-sm text-slate-600">{dateStr}</td>
-
-                      {/* 사유 */}
-                      <td className="px-5 py-4 text-sm text-slate-500 max-w-xs">
-                        <div className="truncate">{req.reason || '-'}</div>
-                      </td>
-
-                      {/* 상태 + 관리자 코멘트 */}
-                      <td className="px-5 py-4">
-                        <StatusBadge status={req.status} />
-                        {req.adminComment && (
-                          <p className="text-xs text-slate-400 mt-1 max-w-xs truncate">
-                            {req.adminComment}
-                          </p>
-                        )}
-                      </td>
-
-                      {/* 신청일 */}
-                      <td className="px-5 py-4 text-sm text-slate-400">
-                        {req.createdAt?.slice(0, 10)}
-                      </td>
-
-                      {/* 작업 버튼 — pending 상태일 때만 표시 */}
-                      <td className="px-5 py-4">
-                        {req.status === 'pending' ? (
-                          <div className="flex items-center gap-2">
-                            <button
-                              onClick={() => handleApproveTimeOff(req.id)}
-                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-white transition-opacity hover:opacity-90"
-                              style={{ background: '#059669' }}
-                            >
-                              <Check size={12} />
-                              승인
-                            </button>
-                            <button
-                              onClick={() => handleRejectTimeOff(req.id)}
-                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
-                              style={{
-                                background: '#F8FAFC',
-                                color: '#64748B',
-                                border: '1px solid #E2E8F0',
-                              }}
-                            >
-                              <X size={12} />
-                              반려
-                            </button>
-                          </div>
-                        ) : (
-                          <span className="text-xs text-slate-300">-</span>
-                        )}
-                      </td>
-                    </tr>
-                  )
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {/* ══════════════════════════════════════════════════════
-          교대 요청 탭
-      ══════════════════════════════════════════════════════ */}
-      {activeTab === 'swap' && (
-        <div
-          className="bg-white rounded-2xl border border-slate-200 overflow-hidden"
-          style={{ boxShadow: '0 4px 20px rgba(0,0,0,0.06)' }}
-        >
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-slate-100">
-                {['요청자', '교대 시프트', '연차 조건', '상태', '제안 수', '신청일', '작업'].map((h) => (
-                  <th
-                    key={h}
-                    className="text-left px-5 py-4 text-xs font-semibold text-slate-500"
-                  >
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {filteredSwap.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="text-center py-12 text-sm text-slate-400">
-                    교대 요청이 없습니다.
-                  </td>
-                </tr>
-              ) : (
-                filteredSwap.map((req) => (
-                  <tr
-                    key={req.id}
-                    className="border-b border-slate-50 hover:bg-slate-50 transition-colors"
-                  >
-                    {/* 요청자 */}
-                    <td className="px-5 py-4">
-                      <div className="flex items-center gap-2.5">
-                        <div
-                          className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
-                          style={{ background: '#8B5CF6' }}
-                        >
-                          {req.requesterName.charAt(0)}
-                        </div>
-                        <span className="text-sm font-medium text-slate-700">
-                          {req.requesterName}
-                        </span>
-                      </div>
-                    </td>
-
-                    {/* 교대 시프트 */}
-                    <td className="px-5 py-4">
-                      <div className="text-sm text-slate-600">{req.requesterDate}</div>
-                      <span
-                        className="inline-block mt-1 text-xs font-bold px-2 py-0.5 rounded"
-                        style={{ background: '#EFF6FF', color: '#3B82F6' }}
+            {/* 휴무·휴가 행 */}
+            {!showOnlySwap && filteredTimeOff.map((req) => {
+              const tc = TYPE_CONFIG[req.type] ?? TYPE_CONFIG.OFF
+              const sc = STATUS_CONFIG[req.status] ?? STATUS_CONFIG.pending
+              const elapsed = formatDistanceToNow(new Date(req.created_at), { addSuffix: true, locale: ko })
+              return (
+                <tr
+                  key={`to-${req.request_id}`}
+                  className="border-b border-slate-50 hover:bg-slate-50 transition-colors cursor-pointer"
+                  onClick={() => openDetail(req)}
+                >
+                  <td className="px-5 py-4">
+                    <div className="flex items-center gap-2.5">
+                      <div
+                        className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
+                        style={{ background: '#3B82F6' }}
                       >
-                        {req.requesterShift}
-                      </span>
-                    </td>
+                        {req.requester_name?.charAt(0) ?? '?'}
+                      </div>
+                      <span className="text-sm font-medium text-slate-700">{req.requester_name}</span>
+                    </div>
+                  </td>
+                  <td className="px-5 py-4">
+                    <span className="text-xs font-medium px-2.5 py-1 rounded-full" style={{ background: tc.bg, color: tc.text }}>
+                      {tc.label}
+                    </span>
+                  </td>
+                  <td className="px-5 py-4 text-sm text-slate-600">
+                    {formatDateRange(req.start_date, req.end_date)}
+                  </td>
+                  <td className="px-5 py-4 text-sm text-slate-500 max-w-[140px]">
+                    <div className="truncate">{req.reason || '-'}</div>
+                  </td>
+                  <td className="px-5 py-4">
+                    <span className="text-xs font-medium px-2.5 py-1 rounded-full" style={{ background: sc.bg, color: sc.text }}>
+                      {sc.label}
+                    </span>
+                  </td>
+                  <td className="px-5 py-4 text-xs text-slate-400">{elapsed}</td>
+                  <td className="px-5 py-4">
+                    {req.status === 'pending' ? (
+                      <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          onClick={() => openDetail(req)}
+                          className="px-3 py-1.5 rounded-lg text-xs font-medium text-white"
+                          style={{ background: '#3B82F6' }}
+                        >
+                          처리
+                        </button>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-slate-300">-</span>
+                    )}
+                  </td>
+                </tr>
+              )
+            })}
 
-                    {/* 연차 조건 */}
-                    <td className="px-5 py-4 text-sm text-slate-600">
-                      {req.requiredYearsMin}년 ~ {req.requiredYearsMax}년차
-                    </td>
+            {/* 교대 요청 행 */}
+            {(typeFilter === '' || typeFilter === 'SWAP') && filteredSwap.map((req) => {
+              const sc = STATUS_CONFIG[req.status] ?? STATUS_CONFIG.pending
+              const elapsed = req.created_at
+                ? formatDistanceToNow(new Date(req.created_at), { addSuffix: true, locale: ko })
+                : '-'
+              const isAccepted = req.status === 'accepted'
+              const isActive   = req.status === 'pending' || isAccepted
+              return (
+                <tr
+                  key={`sw-${req.swap_request_id}`}
+                  className="border-b border-slate-50 hover:bg-slate-50 transition-colors"
+                >
+                  <td className="px-5 py-4">
+                    <div className="flex items-center gap-2.5">
+                      <div
+                        className="w-8 h-8 rounded-full flex items-center justify-center text-white shrink-0"
+                        style={{ background: '#8B5CF6' }}
+                      >
+                        <RefreshCw size={14} />
+                      </div>
+                      <div>
+                        <span className="text-sm font-medium text-slate-700">{req.requester_name}</span>
+                        {isAccepted && req.proposer_name && (
+                          <div className="text-xs text-slate-400 mt-0.5">
+                            {req.requester_name} {req.shift_code} ↕ {req.proposer_name} {req.proposer_shift_code}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-5 py-4">
+                    <span className="text-xs font-medium px-2.5 py-1 rounded-full" style={{ background: '#EFF6FF', color: '#3B82F6' }}>
+                      교대
+                    </span>
+                  </td>
+                  <td className="px-5 py-4 text-sm text-slate-600">
+                    {req.work_date ?? '-'}
+                  </td>
+                  <td className="px-5 py-4 text-sm text-slate-500 max-w-[140px]">
+                    <div className="truncate">{req.reason || '-'}</div>
+                  </td>
+                  <td className="px-5 py-4">
+                    <span className="text-xs font-medium px-2.5 py-1 rounded-full" style={{ background: sc.bg, color: sc.text }}>
+                      {sc.label}
+                    </span>
+                  </td>
+                  <td className="px-5 py-4 text-xs text-slate-400">{elapsed}</td>
+                  <td className="px-5 py-4">
+                    {isActive ? (
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => isAccepted && setSwapApproveTarget(req)}
+                          disabled={!isAccepted}
+                          className="px-3 py-1.5 rounded-lg text-xs font-medium text-white transition-opacity"
+                          style={{
+                            background: '#3B82F6',
+                            opacity: isAccepted ? 1 : 0.35,
+                            cursor: isAccepted ? 'pointer' : 'not-allowed',
+                          }}
+                        >
+                          승인
+                        </button>
+                        <button
+                          onClick={() => { setSwapRejectTarget(req); setSwapRejectReason('') }}
+                          className="px-3 py-1.5 rounded-lg text-xs font-medium text-white"
+                          style={{ background: '#EF4444' }}
+                        >
+                          반려
+                        </button>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-slate-300">-</span>
+                    )}
+                  </td>
+                </tr>
+              )
+            })}
 
-                    {/* 상태 */}
-                    <td className="px-5 py-4">
-                      <StatusBadge status={req.status} />
-                    </td>
-
-                    {/* 제안 수 */}
-                    <td className="px-5 py-4 text-sm text-slate-600">
-                      {req.proposals?.length ?? 0}건
-                    </td>
-
-                    {/* 신청일 */}
-                    <td className="px-5 py-4 text-sm text-slate-400">
-                      {req.createdAt?.slice(0, 10)}
-                    </td>
-
-                    {/* 작업 버튼 — accepted 상태(합의 완료)일 때만 최종 승인 가능 */}
-                    <td className="px-5 py-4">
-                      {req.status === 'accepted' ? (
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => handleApproveSwap(req.id)}
-                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-white"
-                            style={{ background: '#059669' }}
-                          >
-                            <Check size={12} />
-                            최종 승인
-                          </button>
-                          <button
-                            onClick={() => handleRejectSwap(req.id)}
-                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium"
-                            style={{
-                              background: '#F8FAFC',
-                              color: '#64748B',
-                              border: '1px solid #E2E8F0',
-                            }}
-                          >
-                            <X size={12} />
-                            반려
-                          </button>
-                        </div>
-                      ) : (
-                        <span className="text-xs text-slate-300">-</span>
-                      )}
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      )}
+            {/* 빈 상태 */}
+            {filteredTimeOff.length === 0 && filteredSwap.length === 0 && (
+              <tr>
+                <td colSpan={7} className="text-center py-12 text-sm text-slate-400">
+                  {activeStatus
+                    ? `${STATUS_CONFIG[activeStatus]?.label} 상태의 요청이 없습니다`
+                    : '요청 내역이 없습니다'}
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 }

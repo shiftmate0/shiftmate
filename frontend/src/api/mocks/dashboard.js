@@ -1,17 +1,17 @@
-// Mock: 관리자 대시보드
+// Mock: 관리자 대시보드 (API 응답 형식 — snake_case, { date, day, count })
 export const mockAdminDashboard = {
-  total_employees: 10,
-  today_working: 6,
+  total_employees: 7,
+  today_working: 5,
   today_on_leave: 1,
-  pending_requests: 3,
+  pending_requests: 4,
   this_week_schedule: [
-    { date: '2025-05-19', working_count: 6 },
-    { date: '2025-05-20', working_count: 5 },
-    { date: '2025-05-21', working_count: 7 },
-    { date: '2025-05-22', working_count: 6 },
-    { date: '2025-05-23', working_count: 4 },
-    { date: '2025-05-24', working_count: 3 },
-    { date: '2025-05-25', working_count: 5 },
+    { date: '2026-04-27', day: '월', count: 5 },
+    { date: '2026-04-28', day: '화', count: 4 },
+    { date: '2026-04-29', day: '수', count: 6 },
+    { date: '2026-04-30', day: '목', count: 5 },
+    { date: '2026-05-01', day: '금', count: 4 },
+    { date: '2026-05-02', day: '토', count: 2 },
+    { date: '2026-05-03', day: '일', count: 1 },
   ],
 }
 
