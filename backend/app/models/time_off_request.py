@@ -1,5 +1,6 @@
 from sqlalchemy import Column, Integer, Text, Enum, Date, ForeignKey, TIMESTAMP
 from sqlalchemy.sql import func
+from sqlalchemy.orm import relationship
 from app.core.database import Base
 
 
@@ -22,3 +23,4 @@ class TimeOffRequest(Base):
     cancel_reason = Column(Text, nullable=True)
     created_at = Column(TIMESTAMP(timezone=True), nullable=False, server_default=func.now())
     processed_at = Column(TIMESTAMP(timezone=True), nullable=True)
+    requester = relationship("User", foreign_keys=[requester_id])
