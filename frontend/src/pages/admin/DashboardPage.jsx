@@ -6,7 +6,7 @@ import {
 } from 'recharts'
 import { mockAdminDashboard } from '../../api/mocks/dashboard'
 import { mockAdminTimeOffRequests } from '../../api/mocks/timeOffRequests'
-import { MOCK_PERIOD_STATUS } from '../../api/mocks/schedules'
+import { mockSchedulesMeta } from '../../api/mocks/schedules'
 
 // ── 실제 API로 교체할 때 ────────────────────────────────────
 // import apiClient from '../../api/client'
@@ -119,7 +119,7 @@ export default function DashboardPage() {
   const todayLabel = `${now.getFullYear()}년 ${now.getMonth() + 1}월 ${now.getDate()}일 (${WEEKDAYS[now.getDay()]})`
   const todayStr = now.toISOString().slice(0, 10)
 
-  const isConfirmed = MOCK_PERIOD_STATUS.is_confirmed
+  const isConfirmed = mockSchedulesMeta.period_status == 'confirmed'
 
   return (
     <div className="space-y-6">
