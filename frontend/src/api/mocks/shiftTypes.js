@@ -1,18 +1,8 @@
-/**
- * Mock 데이터 — 근무 유형 색상
- * ⚠ 멤버 1의 GET /api/admin/shift-types API 완성 전 임시 사용
- * 완성 후 → src/api/schedules.js의 fetchShiftTypes()로 교체
- */
-export const MOCK_SHIFT_TYPES = [
-  { id: 1, code: "D",   label: "Day",      color: "#3B82F6", is_work_day: true  },
-  { id: 2, code: "E",   label: "Evening",  color: "#F59E0B", is_work_day: true  },
-  { id: 3, code: "N",   label: "Night",    color: "#8B5CF6", is_work_day: true  },
-  { id: 4, code: "OFF", label: "Off",      color: "#9CA3AF", is_work_day: false },
-  { id: 5, code: "VAC", label: "Vacation", color: "#10B981", is_work_day: false },
-];
-
-// shift_code → color 빠른 조회용 Map
-export const SHIFT_COLOR_MAP = Object.fromEntries(
-  MOCK_SHIFT_TYPES.map((s) => [s.code, s.color])
-);
-// 예: SHIFT_COLOR_MAP["D"] === "#3B82F6"
+// frontend/src/api/mocks/shiftTypes.js
+export const mockShiftTypes = [
+  { shift_type_id: 1, code: 'D',   label: '주간', start_time: '08:00', end_time: '16:00', color: '#3B82F6', is_work_day: true,  is_system: false },
+  { shift_type_id: 2, code: 'E',   label: '오후', start_time: '16:00', end_time: '00:00', color: '#8B5CF6', is_work_day: true,  is_system: false },
+  { shift_type_id: 3, code: 'N',   label: '야간', start_time: '00:00', end_time: '08:00', color: '#1D4ED8', is_work_day: true,  is_system: false },
+  { shift_type_id: 4, code: 'OFF', label: '휴무', start_time: null,    end_time: null,    color: '#94A3B8', is_work_day: false, is_system: true  },
+  { shift_type_id: 5, code: 'VAC', label: '휴가', start_time: null,    end_time: null,    color: '#10B981', is_work_day: false, is_system: true  },
+]
