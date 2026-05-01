@@ -66,7 +66,7 @@ export const fetchEmployeeDashboard = async () => {
 };
 
 // ── 근무 유형 목록 (멤버 1 담당) ─────────────────────
-// ⚠ 멤버 1 API 완성 전: MOCK_SHIFT_TYPES 사용
+// ⚠ 멤버 1 API 완성 전: mockShiftTypes 사용
 // ⚠ 완성 후: 아래 함수로 교체
 export const fetchShiftTypes = async () => {
   const { data } = await apiClient.get("/admin/shift-types");

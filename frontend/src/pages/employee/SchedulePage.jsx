@@ -8,7 +8,7 @@
  *   npm install react-big-calendar moment
  *
  * ⚠ 멤버 1 BE(근무유형 API) 완성 전:
- *   MOCK_SHIFT_TYPES 사용 중 → API 완성 후 fetchShiftTypes()로 교체
+ *   mockShiftTypes 사용 중 → API 완성 후 fetchShiftTypes()로 교체
  */
 
 import { useState, useEffect, useCallback } from "react";
@@ -23,7 +23,7 @@ import {
   validateSchedules,
   fetchShiftTypes,
 } from "../../api/schedules";
-import { MOCK_SHIFT_TYPES } from "../../api/mocks/shiftTypes"; // Day 3 멤버1 API 완성 후 제거
+import { mockShiftTypes } from "../../api/mocks/shiftTypes"; // Day 3 멤버1 API 완성 후 제거
 
 moment.locale("ko");
 const localizer = momentLocalizer(moment);
@@ -55,7 +55,7 @@ export default function SchedulePage() {
     const loadShiftTypes = async () => {
       let types;
       if (USE_MOCK_SHIFT_TYPES) {
-        types = MOCK_SHIFT_TYPES;
+        types = mockShiftTypes;
       } else {
         // 멤버 1 API 완성 후 교체
         const res = await fetchShiftTypes();

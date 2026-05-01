@@ -535,6 +535,7 @@ def is_expired(swap_request) -> bool:
 □ http://localhost:8000/docs 접속 가능
 □ POST /api/auth/login ADMIN001 계정 로그인 성공
 □ POST /api/auth/login EMP002 계정 로그인 성공 (DEMO_MODE)
+□ POST /api/auth/login EMP003 계정 로그인 성공 (DEMO_MODE)
 □ npm run dev 정상 실행
 □ http://localhost:5173/login 렌더링 확인
 □ 6개 mock 파일 커밋 완료
