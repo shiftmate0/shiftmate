@@ -1,4 +1,10 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect, useCallback, useRef } from "react";
+import { useSearchParams } from "react-router-dom";
+import apiClient from "../../api/client";
+import { Calendar, momentLocalizer, Views } from "react-big-calendar";
+import moment from "moment";
+import "moment/locale/ko";
+import "react-big-calendar/lib/css/react-big-calendar.css";
 import {
   Save,
   CheckCircle,
@@ -22,6 +28,10 @@ const DAYS_OF_WEEK = ["일", "월", "화", "수", "목", "금", "토"];
 
 const APRIL_START_DOW = 3;
 const MARCH_START_DOW = 0;
+
+moment.locale("ko");
+const localizer = momentLocalizer(moment);
+const DAY_NAMES_KO = ["일", "월", "화", "수", "목", "금", "토"];
 
 function getDayOfWeek(startDow, day) {
   return (startDow + day - 1) % 7;
@@ -114,6 +124,11 @@ function ShiftCell({
 }
 
 export default function SchedulesPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const view = searchParams.get("view") || "grid";
+  const urlYear = parseInt(searchParams.get("year")) || new Date().getFullYear();
+  const urlMonth = parseInt(searchParams.get("month")) || new Date().getMonth() + 1;
+
   const [schedules, setSchedules] = useState(() =>
     JSON.parse(JSON.stringify(aprilSchedules))
   );
@@ -201,8 +216,40 @@ export default function SchedulesPage() {
     );
   };
 
+  if (view === "calendar") {
+    return (
+      <CalendarView
+        year={urlYear}
+        month={urlMonth}
+        setSearchParams={setSearchParams}
+      />
+    );
+  }
+
   return (
     <div className="space-y-5 h-full flex flex-col">
+      {/* 그리드 / 캘린더 탭 전환 */}
+      <div style={{ display: "flex", gap: 4 }}>
+        <button
+          onClick={() => setSearchParams({ year: urlYear, month: urlMonth, view: "grid" })}
+          style={{
+            padding: "6px 16px", borderRadius: 8, border: "none", cursor: "pointer",
+            background: "white", color: "#3B82F6", fontWeight: 600, fontSize: 13,
+            boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+          }}
+        >
+          그리드
+        </button>
+        <button
+          onClick={() => setSearchParams({ year: urlYear, month: urlMonth, view: "calendar" })}
+          style={{
+            padding: "6px 16px", borderRadius: 8, border: "none", cursor: "pointer",
+            background: "#F1F5F9", color: "#64748B", fontWeight: 600, fontSize: 13,
+          }}
+        >
+          캘린더
+        </button>
+      </div>
       <div className="flex items-center justify-between shrink-0">
         <div>
           <h1 className="font-bold text-slate-800" style={{ fontSize: 24 }}>
@@ -533,6 +580,276 @@ export default function SchedulesPage() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════
+// 캘린더 탭 — 사용자3(멤버2) 담당
+// ════════════════════════════════════════════════════════
+function CalendarView({ year, month, setSearchParams }) {
+  const [periodStatus, setPeriodStatus] = useState("draft");
+  const [rawSchedules, setRawSchedules] = useState([]);
+  const [employees, setEmployees] = useState([]);
+  const [shiftTypes, setShiftTypes] = useState([]);
+  const [selectedUser, setSelectedUser] = useState("");
+  const [selectedShift, setSelectedShift] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [popover, setPopover] = useState(null);
+  const popoverRef = useRef(null);
+
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true);
+      try {
+        const [schedRes, empRes, stRes] = await Promise.all([
+          apiClient.get("/schedules", { params: { year, month } }),
+          apiClient.get("/admin/employees"),
+          apiClient.get("/admin/shift-types"),
+        ]);
+        setPeriodStatus(schedRes.data.period_status);
+        setRawSchedules(schedRes.data.schedules || []);
+        setEmployees(empRes.data || []);
+        setShiftTypes(stRes.data || []);
+      } catch (err) {
+        console.error("캘린더 데이터 로드 실패:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, [year, month]);
+
+  const empMap = useMemo(() => {
+    const m = {};
+    employees.forEach((e) => { m[e.user_id] = e.name; });
+    return m;
+  }, [employees]);
+
+  const allEvents = useMemo(() =>
+    rawSchedules.map((s) => ({
+      id: s.schedule_id,
+      title: `${empMap[s.user_id] ?? "?"} ${s.shift_code}`,
+      start: new Date(s.work_date + "T00:00:00"),
+      end: new Date(s.work_date + "T00:00:00"),
+      allDay: true,
+      color: s.shift_color,
+      userId: s.user_id,
+      shiftCode: s.shift_code,
+      shiftLabel: s.shift_label,
+      workDate: s.work_date,
+    })),
+    [rawSchedules, empMap]
+  );
+
+  const filteredEvents = useMemo(() =>
+    allEvents
+      .filter((e) => !selectedUser || e.userId === parseInt(selectedUser))
+      .filter((e) => !selectedShift || e.shiftCode === selectedShift),
+    [allEvents, selectedUser, selectedShift]
+  );
+
+  const eventPropGetter = useCallback((event) => ({
+    style: {
+      backgroundColor: event.color,
+      borderColor: event.color,
+      color: "#ffffff",
+      borderRadius: "4px",
+      fontSize: "11px",
+      padding: "1px 4px",
+    },
+  }), []);
+
+  const dayPropGetter = useCallback((date) => {
+    const isToday = date.toDateString() === new Date().toDateString();
+    const dow = date.getDay();
+    if (isToday) return { style: { backgroundColor: "#EFF6FF", border: "1px solid #3B82F6" } };
+    if (dow === 6) return { style: { backgroundColor: "#F8FAFC" } };
+    if (dow === 0) return { style: { backgroundColor: "#FFF5F5" } };
+    return {};
+  }, []);
+
+  const handleNavigate = useCallback((newDate) => {
+    setSearchParams({ year: newDate.getFullYear(), month: newDate.getMonth() + 1, view: "calendar" });
+  }, [setSearchParams]);
+
+  const openPopover = useCallback((date) => {
+    const dateStr = new Date(date).toISOString().split("T")[0];
+    const daySchedules = rawSchedules.filter((s) => s.work_date === dateStr);
+    setPopover({ date, daySchedules });
+  }, [rawSchedules]);
+
+  useEffect(() => {
+    const handler = (e) => {
+      if (popoverRef.current && !popoverRef.current.contains(e.target)) {
+        setPopover(null);
+      }
+    };
+    if (popover) document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [popover]);
+
+  const formatDate = (date) => {
+    const d = new Date(date);
+    return `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일 (${DAY_NAMES_KO[d.getDay()]})`;
+  };
+
+  const calDate = new Date(year, month - 1, 1);
+
+  return (
+    <div>
+      {/* 그리드 / 캘린더 탭 전환 */}
+      <div style={{ display: "flex", gap: 4, marginBottom: 16 }}>
+        <button
+          onClick={() => setSearchParams({ year, month, view: "grid" })}
+          style={{
+            padding: "6px 16px", borderRadius: 8, border: "none", cursor: "pointer",
+            background: "#F1F5F9", color: "#64748B", fontWeight: 600, fontSize: 13,
+          }}
+        >
+          그리드
+        </button>
+        <button
+          style={{
+            padding: "6px 16px", borderRadius: 8, border: "none", cursor: "pointer",
+            background: "white", color: "#3B82F6", fontWeight: 600, fontSize: 13,
+            boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+          }}
+        >
+          캘린더
+        </button>
+      </div>
+
+      {/* 미확정 배너 */}
+      {periodStatus === "draft" && (
+        <div style={{
+          background: "#FEF3C7", borderLeft: "4px solid #D97706",
+          padding: "12px 16px", borderRadius: 8, marginBottom: 16,
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          color: "#D97706", fontSize: 14, fontWeight: 500,
+        }}>
+          <span>⚠ {year}년 {month}월 근무표는 아직 미확정입니다.</span>
+          <button
+            onClick={() => setSearchParams({ year, month, view: "grid" })}
+            style={{
+              background: "transparent", border: "1px solid #D97706",
+              borderRadius: 6, padding: "4px 10px",
+              color: "#D97706", cursor: "pointer", fontSize: 13, fontWeight: 600,
+            }}
+          >
+            근무표 작성으로 이동 →
+          </button>
+        </div>
+      )}
+
+      {/* 필터 행 */}
+      <div style={{ display: "flex", gap: 12, marginBottom: 16 }}>
+        <select
+          value={selectedUser}
+          onChange={(e) => setSelectedUser(e.target.value)}
+          style={{
+            padding: "6px 12px", borderRadius: 8,
+            border: "1px solid #E5E7EB", fontSize: 13, color: "#374151",
+          }}
+        >
+          <option value="">전체 직원</option>
+          {employees.map((e) => (
+            <option key={e.user_id} value={e.user_id}>{e.name}</option>
+          ))}
+        </select>
+        <select
+          value={selectedShift}
+          onChange={(e) => setSelectedShift(e.target.value)}
+          style={{
+            padding: "6px 12px", borderRadius: 8,
+            border: "1px solid #E5E7EB", fontSize: 13, color: "#374151",
+          }}
+        >
+          <option value="">전체 유형</option>
+          {shiftTypes.map((st) => (
+            <option key={st.shift_type_id} value={st.code}>{st.code} — {st.label}</option>
+          ))}
+        </select>
+      </div>
+
+      {/* 캘린더 본체 */}
+      {loading ? (
+        <div style={{ textAlign: "center", padding: 60, color: "#6B7280" }}>불러오는 중...</div>
+      ) : rawSchedules.length === 0 ? (
+        <div style={{ textAlign: "center", padding: 60, color: "#6B7280", fontSize: 15 }}>
+          이번 달 근무표가 아직 작성되지 않았습니다
+        </div>
+      ) : (
+        <div style={{ height: 650 }}>
+          <Calendar
+            localizer={localizer}
+            events={filteredEvents}
+            defaultView={Views.MONTH}
+            views={[Views.MONTH]}
+            date={calDate}
+            onNavigate={handleNavigate}
+            eventPropGetter={eventPropGetter}
+            dayPropGetter={dayPropGetter}
+            selectable
+            onSelectSlot={({ start }) => openPopover(start)}
+            onSelectEvent={(event) => openPopover(event.start)}
+            style={{ borderRadius: 12 }}
+            messages={{ next: "다음 달", previous: "이전 달", today: "이번 달", month: "월" }}
+          />
+        </div>
+      )}
+
+      {/* 날짜 클릭 팝오버 */}
+      {popover && (
+        <div
+          ref={popoverRef}
+          style={{
+            position: "fixed", top: "50%", left: "50%",
+            transform: "translate(-50%, -50%)",
+            backgroundColor: "#fff", borderRadius: 12, padding: 20,
+            boxShadow: "0 8px 30px rgba(0,0,0,0.15)",
+            zIndex: 9999, minWidth: 260, maxHeight: "60vh", overflowY: "auto",
+          }}
+        >
+          <div style={{ fontWeight: 700, marginBottom: 12, color: "#111827", fontSize: 15 }}>
+            {formatDate(popover.date)}
+          </div>
+          {popover.daySchedules.length === 0 ? (
+            <div style={{ color: "#6B7280", fontSize: 14 }}>근무 없음</div>
+          ) : (
+            <>
+              {popover.daySchedules.map((s) => (
+                <div key={s.schedule_id} style={{
+                  display: "flex", alignItems: "center", gap: 8,
+                  padding: "6px 0", borderBottom: "1px solid #F3F4F6", fontSize: 14,
+                }}>
+                  <div style={{
+                    width: 16, height: 16, borderRadius: 3,
+                    backgroundColor: s.shift_color, flexShrink: 0,
+                  }} />
+                  <span style={{ color: "#374151", flex: 1 }}>{empMap[s.user_id] ?? "?"}</span>
+                  <span style={{ fontWeight: 600, color: "#111827" }}>
+                    {s.shift_code} {s.shift_label}
+                  </span>
+                </div>
+              ))}
+              <div style={{ marginTop: 10, fontSize: 13, color: "#6B7280" }}>
+                근무 인원: {popover.daySchedules.length}명
+              </div>
+            </>
+          )}
+          <button
+            onClick={() => setPopover(null)}
+            style={{
+              marginTop: 12, width: "100%", padding: "6px 0",
+              borderRadius: 6, border: "1px solid #E5E7EB",
+              background: "transparent", cursor: "pointer", color: "#6B7280", fontSize: 13,
+            }}
+          >
+            닫기
+          </button>
         </div>
       )}
     </div>

@@ -1,36 +1,26 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from typing import Optional, List
 from datetime import date, datetime
-
-
-# ── 공용 ──────────────────────────────────────────────
-class ShiftTypeInfo(BaseModel):
-    id: int
-    code: str
-    label: str
-    color: str
-    is_work_day: bool
-
-    class Config:
-        from_attributes = True
 
 
 # ── 근무표 조회 응답 ──────────────────────────────────
 class ScheduleItem(BaseModel):
     schedule_id: int
     user_id: int
-    user_name: str
     work_date: date
-    shift_type: ShiftTypeInfo
+    shift_type_id: int
+    shift_code: str
+    shift_color: str
+    shift_label: str
     is_locked: bool
-    version: int
 
     class Config:
         from_attributes = True
 
 
 class ScheduleListResponse(BaseModel):
-    data: List[ScheduleItem]
+    period_status: str  # "draft" | "confirmed"
+    schedules: List[ScheduleItem]
 
 
 # ── 근무표 배치 저장 ──────────────────────────────────
@@ -40,38 +30,38 @@ class ScheduleBulkItem(BaseModel):
     shift_type_id: int
 
 
-class ScheduleBulkRequest(BaseModel):
-    items: List[ScheduleBulkItem]
-
-
 class ScheduleBulkResponse(BaseModel):
-    success: bool
-    upserted: int  # 처리된 레코드 수
+    saved: int
 
 
 # ── 근무표 단건 수정 ──────────────────────────────────
 class ScheduleUpdateRequest(BaseModel):
     shift_type_id: int
-    version: int = Field(..., description="낙관적 잠금용 현재 version 값")
-    change_reason: str
 
 
 class ScheduleUpdateResponse(BaseModel):
     schedule_id: int
-    version: int  # 업데이트된 새 version
+    user_id: int
+    work_date: date
+    shift_type_id: int
+    shift_code: str
+    shift_label: str
+    is_locked: bool
 
 
 # ── 월 확정 ───────────────────────────────────────────
 class ConfirmResponse(BaseModel):
+    period_id: int
     year: int
     month: int
+    status: str
     confirmed_at: datetime
-    period_id: int
+    confirmed_by: int
 
 
 # ── 검증 ──────────────────────────────────────────────
 class ValidationWarning(BaseModel):
-    type: str   # consecutive_night | post_night_day | understaffed | low_avg_years | overloaded
+    type: str
     message: str
     affected_date: Optional[date] = None
     affected_user_id: Optional[int] = None
@@ -81,20 +71,39 @@ class ValidationWarning(BaseModel):
 class ValidateResponse(BaseModel):
     year: int
     month: int
+    is_valid: bool
     warnings: List[ValidationWarning]
-    has_warnings: bool
 
 
 # ── 직원 대시보드 ─────────────────────────────────────
+class TodaySchedule(BaseModel):
+    work_date: date
+    shift_code: str
+    shift_label: str
+    shift_color: str
+    start_time: Optional[str] = None   # "HH:MM" | null
+    end_time: Optional[str] = None     # "HH:MM" | null
+    is_work_day: bool
+
+
 class WeekdaySchedule(BaseModel):
-    date: date
+    work_date: date
+    day_label: str                      # 월~일
     shift_code: Optional[str] = None
     shift_label: Optional[str] = None
     shift_color: Optional[str] = None
+    is_today: bool
+
+
+class MyRequestItem(BaseModel):
+    request_id: int
+    type: str          # "OFF" | "VAC" | "SWAP"
+    date_display: str
+    status: str
+    created_at: str
 
 
 class DashboardResponse(BaseModel):
-    today_shift_code: Optional[str]
-    today_shift_label: Optional[str]
-    today_shift_color: Optional[str]
-    this_week: List[WeekdaySchedule]  # 월~일 7일
+    today_schedule: Optional[TodaySchedule] = None
+    this_week: List[WeekdaySchedule]
+    my_requests: List[MyRequestItem]
