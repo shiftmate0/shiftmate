@@ -19,9 +19,10 @@ from typing import Optional, List
 import calendar
 
 from app.dependencies.auth import get_current_user, require_admin
-from app.dependencies.db import get_db
+from app.core.database import get_db
 from app.models.user import User
-from app.models.schedule import Schedule, SchedulePeriod
+from app.models.schedule import Schedule
+from app.models.schedule_period import SchedulePeriod
 from app.models.shift_type import ShiftType
 from app.models.system_settings import SystemSettings
 from app.schemas.schedule import (

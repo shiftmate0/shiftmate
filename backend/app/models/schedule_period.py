@@ -2,7 +2,6 @@ from sqlalchemy import Column, Integer, Enum, ForeignKey, TIMESTAMP, UniqueConst
 from sqlalchemy.sql import func
 from app.core.database import Base
 
-
 class SchedulePeriod(Base):
     __tablename__ = "schedule_periods"
     __table_args__ = (UniqueConstraint("year", "month", name="uq_schedule_periods_year_month"),)

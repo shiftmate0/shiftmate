@@ -21,15 +21,3 @@ class Schedule(Base):
 
     user = relationship("User")
     shift_type = relationship("ShiftType")
-
-
-class SchedulePeriod(Base):
-    __tablename__ = "schedule_periods"
-    __table_args__ = (UniqueConstraint("year", "month", name="uq_schedule_periods_year_month"),)
-
-    period_id = Column(Integer, primary_key=True, autoincrement=True)
-    year = Column(Integer, nullable=False)
-    month = Column(Integer, nullable=False)
-    status = Column(Boolean, nullable=False, default=True)
-    confirmed_at = Column(TIMESTAMP(timezone=True), nullable=True)
-    confirmed_by = Column(Integer, ForeignKey("users.user_id"), nullable=True)
