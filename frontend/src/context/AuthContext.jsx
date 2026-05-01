@@ -1,4 +1,3 @@
-// frontend/src/context/AuthContext.jsx
 import { createContext, useContext, useState, useEffect } from 'react'
 import apiClient from '../api/client'
 
@@ -30,11 +29,27 @@ export function AuthProvider({ children }) {
       employee_no: employeeNo,
       password,
     })
+    const userInfo = {
+      user_id: data.user_id,
+      name: data.name,
+      role: data.role,
+      is_initial_password: data.is_initial_password,
+      employee_no: data.employee_no,
+      years_of_experience: data.years_of_experience,
+    }
     localStorage.setItem('token', data.access_token)
-    localStorage.setItem('user', JSON.stringify(data.user))
+    localStorage.setItem('user', JSON.stringify(userInfo))
     setToken(data.access_token)
-    setUser(data.user)
-    return data.user
+    setUser(userInfo)
+    return userInfo
+  }
+
+  function updateUser(partial) {
+    setUser(prev => {
+      const next = { ...prev, ...partial }
+      localStorage.setItem('user', JSON.stringify(next))
+      return next
+    })
   }
 
   function logout() {
@@ -45,7 +60,7 @@ export function AuthProvider({ children }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, token, login, logout, loading }}>
+    <AuthContext.Provider value={{ user, token, login, logout, updateUser, loading }}>
       {children}
     </AuthContext.Provider>
   )

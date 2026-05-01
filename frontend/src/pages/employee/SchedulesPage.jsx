@@ -14,14 +14,14 @@ import moment from "moment";
 import "moment/locale/ko";
 import "react-big-calendar/lib/css/react-big-calendar.css";
 import apiClient from "../../api/client";
-import { MOCK_SHIFT_TYPES } from "../../api/mocks/shiftTypes";
+import { mockShiftTypes } from "../../api/mocks/shiftTypes";
 
 moment.locale("ko");
 const localizer = momentLocalizer(moment);
 const DAY_NAMES_KO = ["일", "월", "화", "수", "목", "금", "토"];
 
 // OFF/VAC는 시간 미표시
-const SHIFT_TIME_MAP = MOCK_SHIFT_TYPES.reduce((acc, st) => {
+const SHIFT_TIME_MAP = mockShiftTypes.reduce((acc, st) => {
   if (st.start_time) acc[st.code] = { start: st.start_time, end: st.end_time };
   return acc;
 }, {});
