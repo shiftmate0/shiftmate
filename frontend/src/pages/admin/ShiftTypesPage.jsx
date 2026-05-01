@@ -1,566 +1,355 @@
-import { useMemo, useState } from "react";
-import {
-  Plus,
-  Edit2,
-  Trash2,
-  Clock,
-  Shield,
-  X,
-  Check,
-  AlertCircle,
-} from "lucide-react";
-import { shiftTypes } from "../../data/mockData.js";
+import { useState, useEffect } from 'react'
+import { Plus } from 'lucide-react'
+import apiClient from '../../api/client'
+import { mockShiftTypes } from '../../api/mocks/shiftTypes'
+import Modal, { ModalHeader, ModalBody, ModalFooter } from '../../components/Modal'
+import Button from '../../components/Button'
+import Input from '../../components/Input'
+import Table, { TableHeader, TableHead, TableBody, TableRow, TableCell } from '../../components/Table'
+import { useToast } from '../../components/Toast'
 
-const defaultForm = {
-  code: "",
-  label: "",
-  startTime: "",
-  endTime: "",
-  color: "#3B82F6",
-  isWorkDay: true,
-};
+const COLOR_RE = /^#[0-9A-Fa-f]{6}$/
+const defaultForm = { code: '', label: '', start_time: '', end_time: '', color: '#3B82F6', is_work_day: true }
 
-const colorPresets = [
-  "#3B82F6",
-  "#8B5CF6",
-  "#1D4ED8",
-  "#10B981",
-  "#F59E0B",
-  "#EF4444",
-  "#EC4899",
-  "#14B8A6",
-  "#F97316",
-  "#6366F1",
-];
+function isValidColor(v) {
+  return COLOR_RE.test(v)
+}
 
-export default function ShiftTypes() {
-  const [types, setTypes] = useState(shiftTypes);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [editing, setEditing] = useState(null);
-  const [form, setForm] = useState(defaultForm);
-  const [deleteConfirm, setDeleteConfirm] = useState(null);
-  const [error, setError] = useState("");
+function ColorField({ value, onChange }) {
+  return (
+    <div>
+      <label className="block text-sm font-medium text-slate-600 mb-1.5">색상</label>
+      <div className="flex items-center gap-3">
+        <div
+          className="w-6 h-6 rounded-full shrink-0 border border-slate-200"
+          style={{ backgroundColor: isValidColor(value) ? value : '#94A3B8' }}
+        />
+        <Input
+          placeholder="#3B82F6"
+          value={value}
+          onChange={e => onChange(e.target.value)}
+        />
+      </div>
+    </div>
+  )
+}
 
-  const sortedTypes = useMemo(() => {
-    return [...types].sort((a, b) => {
-      if (a.isSystem && !b.isSystem) return -1;
-      if (!a.isSystem && b.isSystem) return 1;
-      return String(a.code).localeCompare(String(b.code));
-    });
-  }, [types]);
+function TimeFields({ start, end, onStartChange, onEndChange }) {
+  const cls = 'w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400'
+  return (
+    <div className="grid grid-cols-2 gap-4">
+      <div>
+        <label className="block text-sm font-medium text-slate-600 mb-1.5">시작 시간</label>
+        <input type="time" value={start} onChange={e => onStartChange(e.target.value)} className={cls} />
+      </div>
+      <div>
+        <label className="block text-sm font-medium text-slate-600 mb-1.5">종료 시간</label>
+        <input type="time" value={end} onChange={e => onEndChange(e.target.value)} className={cls} />
+      </div>
+    </div>
+  )
+}
 
-  const openAdd = () => {
-    setEditing(null);
-    setForm(defaultForm);
-    setError("");
-    setModalOpen(true);
-  };
+function WorkDayToggle({ value, onChange }) {
+  return (
+    <div>
+      <label className="block text-sm font-medium text-slate-600 mb-1.5">근무일 여부</label>
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={() => onChange(!value)}
+          className={`relative w-11 h-6 rounded-full transition-colors ${value ? 'bg-blue-500' : 'bg-slate-300'}`}
+        >
+          <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${value ? 'translate-x-5' : ''}`} />
+        </button>
+        <span className="text-sm text-slate-600">{value ? '근무일' : '비근무일'}</span>
+      </div>
+    </div>
+  )
+}
 
-  const openEdit = (shiftType) => {
-    if (shiftType.isSystem) return;
+function validateTime(start, end) {
+  const hasStart = start.trim() !== ''
+  const hasEnd = end.trim() !== ''
+  if (hasStart !== hasEnd) return '시작/종료 시간을 모두 입력하거나 모두 비우세요'
+  return ''
+}
 
-    setEditing(shiftType);
-    setForm({
-      code: shiftType.code,
-      label: shiftType.label,
-      startTime: shiftType.startTime || "",
-      endTime: shiftType.endTime || "",
-      color: shiftType.color,
-      isWorkDay: shiftType.isWorkDay,
-    });
-    setError("");
-    setModalOpen(true);
-  };
+export default function ShiftTypesPage() {
+  const toast = useToast()
+  const [shiftTypes, setShiftTypes] = useState(mockShiftTypes)
+  const [loading, setLoading] = useState(true)
 
-  const closeModal = () => {
-    setModalOpen(false);
-    setEditing(null);
-    setForm(defaultForm);
-    setError("");
-  };
+  const [addOpen, setAddOpen] = useState(false)
+  const [addForm, setAddForm] = useState(defaultForm)
+  const [addError, setAddError] = useState('')
+  const [addLoading, setAddLoading] = useState(false)
 
-  const validateForm = () => {
-    const code = form.code.trim().toUpperCase();
-    const label = form.label.trim();
+  const [editOpen, setEditOpen] = useState(false)
+  const [editTarget, setEditTarget] = useState(null)
+  const [editForm, setEditForm] = useState(defaultForm)
+  const [editError, setEditError] = useState('')
+  const [editLoading, setEditLoading] = useState(false)
 
-    if (!code) return "근무 코드를 입력해주세요.";
-    if (!label) return "표시 이름을 입력해주세요.";
-    if (code === "OFF" || code === "VAC") {
-      return "OFF와 VAC는 시스템 예약 코드이므로 직접 추가하거나 수정할 수 없습니다.";
+  const [deleteTarget, setDeleteTarget] = useState(null)
+  const [deleteLoading, setDeleteLoading] = useState(false)
+
+  useEffect(() => { fetchShiftTypes() }, [])
+
+  async function fetchShiftTypes() {
+    setLoading(true)
+    try {
+      const { data } = await apiClient.get('/admin/shift-types')
+      setShiftTypes(data)
+    } catch {
+      // mock 유지
+    } finally {
+      setLoading(false)
     }
+  }
 
-    const duplicated = types.some((item) => {
-      if (editing && item.id === editing.id) return false;
-      return item.code.toUpperCase() === code;
-    });
+  // --- 근무 유형 추가 ---
+  function openAdd() {
+    setAddForm(defaultForm)
+    setAddError('')
+    setAddOpen(true)
+  }
 
-    if (duplicated) return "이미 사용 중인 근무 코드입니다.";
+  async function handleAdd() {
+    const timeErr = validateTime(addForm.start_time, addForm.end_time)
+    if (timeErr) { setAddError(timeErr); return }
 
-    if (form.isWorkDay && (!form.startTime || !form.endTime)) {
-      return "근무일로 설정한 경우 시작 시간과 종료 시간을 입력해주세요.";
+    setAddError('')
+    setAddLoading(true)
+    try {
+      await apiClient.post('/admin/shift-types', {
+        code: addForm.code.trim().toUpperCase(),
+        label: addForm.label.trim(),
+        start_time: addForm.start_time || null,
+        end_time: addForm.end_time || null,
+        color: addForm.color,
+        is_work_day: addForm.is_work_day,
+      })
+      setAddOpen(false)
+      fetchShiftTypes()
+    } catch (err) {
+      setAddError(err.response?.data?.detail || '등록에 실패했습니다')
+    } finally {
+      setAddLoading(false)
     }
+  }
 
-    return "";
-  };
+  // --- 근무 유형 수정 ---
+  function openEdit(st) {
+    setEditTarget(st)
+    setEditForm({
+      code: st.code,
+      label: st.label,
+      start_time: st.start_time ?? '',
+      end_time: st.end_time ?? '',
+      color: st.color,
+      is_work_day: st.is_work_day,
+    })
+    setEditError('')
+    setEditOpen(true)
+  }
 
-  const handleSave = () => {
-    const validationMessage = validateForm();
+  async function handleEdit() {
+    const timeErr = validateTime(editForm.start_time, editForm.end_time)
+    if (timeErr) { setEditError(timeErr); return }
 
-    if (validationMessage) {
-      setError(validationMessage);
-      return;
+    setEditError('')
+    setEditLoading(true)
+    try {
+      await apiClient.put(`/admin/shift-types/${editTarget.shift_type_id}`, {
+        label: editForm.label.trim(),
+        start_time: editForm.start_time || null,
+        end_time: editForm.end_time || null,
+        color: editForm.color,
+        is_work_day: editForm.is_work_day,
+      })
+      setEditOpen(false)
+      toast.success('근무 유형이 수정되었습니다')
+      fetchShiftTypes()
+    } catch (err) {
+      setEditError(err.response?.data?.detail || '수정에 실패했습니다')
+    } finally {
+      setEditLoading(false)
     }
+  }
 
-    const normalizedForm = {
-      code: form.code.trim().toUpperCase(),
-      label: form.label.trim(),
-      startTime: form.isWorkDay ? form.startTime || null : null,
-      endTime: form.isWorkDay ? form.endTime || null : null,
-      color: form.color,
-      isWorkDay: form.isWorkDay,
-    };
-
-    if (editing) {
-      setTypes((prev) =>
-        prev.map((item) =>
-          item.id === editing.id
-            ? {
-                ...item,
-                ...normalizedForm,
-              }
-            : item
-        )
-      );
-    } else {
-      setTypes((prev) => [
-        ...prev,
-        {
-          id: Date.now(),
-          ...normalizedForm,
-          isSystem: false,
-        },
-      ]);
+  // --- 근무 유형 삭제 ---
+  async function handleDelete() {
+    setDeleteLoading(true)
+    try {
+      await apiClient.delete(`/admin/shift-types/${deleteTarget.shift_type_id}`)
+      setDeleteTarget(null)
+      fetchShiftTypes()
+    } catch (err) {
+      setDeleteTarget(null)
+      const detail = err.response?.data?.detail ?? ''
+      if (detail.includes('사용 중인')) {
+        toast.error('현재 근무표에서 사용 중인 코드는 삭제할 수 없습니다')
+      } else {
+        toast.error(detail || '삭제에 실패했습니다')
+      }
+    } finally {
+      setDeleteLoading(false)
     }
-
-    closeModal();
-  };
-
-  const handleDelete = () => {
-    if (!deleteConfirm || deleteConfirm.isSystem) return;
-
-    setTypes((prev) => prev.filter((item) => item.id !== deleteConfirm.id));
-    setDeleteConfirm(null);
-  };
-
-  const updateForm = (key, value) => {
-    setForm((prev) => ({
-      ...prev,
-      [key]: value,
-    }));
-    setError("");
-  };
+  }
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <h1
-            className="font-bold text-slate-800"
-            style={{ fontSize: 24 }}
-          >
-            근무 유형 관리
-          </h1>
-          <p className="mt-1 text-sm text-slate-500">
-            근무 코드, 표시 이름, 시간, 캘린더 색상을 관리합니다.
-          </p>
-        </div>
-
-        <button
-          type="button"
-          onClick={openAdd}
-          className="flex items-center justify-center gap-2 rounded-[14px] px-5 py-2.5 text-sm font-medium text-white transition-all hover:opacity-90"
-          style={{ background: "#3B82F6" }}
-        >
-          <Plus size={16} />
-          근무 유형 추가
-        </button>
+      {/* 헤더 */}
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold text-slate-800">근무 유형 관리</h1>
+        <Button variant="primary" icon={Plus} onClick={openAdd}>근무 유형 추가</Button>
       </div>
 
-      <div className="flex flex-wrap gap-3">
-        {sortedTypes.map((item) => (
-          <div
-            key={item.id}
-            className="flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium"
-            style={{
-              background: `${item.color}15`,
-              borderColor: `${item.color}40`,
-              color: item.color,
-            }}
-          >
-            <span
-              className="h-3 w-3 rounded-full"
-              style={{ background: item.color }}
-            />
-            {item.code} · {item.label}
-          </div>
-        ))}
-      </div>
-
-      <div className="grid grid-cols-1 gap-4">
-        {sortedTypes.map((item) => (
-          <div
-            key={item.id}
-            className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-5 transition-shadow hover:shadow-sm lg:flex-row lg:items-center"
-            style={{ boxShadow: "0 2px 8px rgba(0,0,0,0.04)" }}
-          >
-            <div
-              className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl font-bold text-white"
-              style={{ background: item.color, fontSize: 18 }}
-            >
-              {item.code}
-            </div>
-
-            <div className="min-w-0 flex-1">
-              <div className="mb-2 flex flex-wrap items-center gap-2">
-                <span
-                  className="font-semibold text-slate-800"
-                  style={{ fontSize: 16 }}
-                >
-                  {item.label}
-                </span>
-
-                <span
-                  className="rounded-full px-2.5 py-0.5 text-xs font-medium"
-                  style={
-                    item.isSystem
-                      ? { background: "#F1F5F9", color: "#64748B" }
-                      : { background: `${item.color}20`, color: item.color }
-                  }
-                >
-                  {item.code}
-                </span>
-
-                {item.isSystem && (
-                  <span
-                    className="flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs"
-                    style={{ background: "#F1F5F9", color: "#94A3B8" }}
-                  >
-                    <Shield size={11} />
-                    예약 코드
-                  </span>
-                )}
-
-                {item.isWorkDay ? (
-                  <span
-                    className="rounded-full px-2.5 py-0.5 text-xs"
-                    style={{ background: "#EFF6FF", color: "#3B82F6" }}
-                  >
-                    근무일
-                  </span>
-                ) : (
-                  <span
-                    className="rounded-full px-2.5 py-0.5 text-xs"
-                    style={{ background: "#F1F5F9", color: "#64748B" }}
-                  >
-                    비근무일
-                  </span>
-                )}
-              </div>
-
-              <div className="flex flex-wrap items-center gap-4 text-sm text-slate-500">
-                {item.startTime && item.endTime ? (
-                  <span className="flex items-center gap-1.5">
-                    <Clock size={13} />
-                    {item.startTime} ~ {item.endTime}
-                  </span>
-                ) : (
-                  <span className="text-xs text-slate-400">
-                    시간 없음
-                  </span>
-                )}
-
-                <span className="flex items-center gap-1.5 text-xs">
-                  <span
-                    className="h-3 w-3 rounded-full"
-                    style={{ background: item.color }}
-                  />
-                  {item.color}
-                </span>
-              </div>
-            </div>
-
-            <div className="flex shrink-0 items-center gap-2">
-              {!item.isSystem ? (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => openEdit(item)}
-                    className="flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 transition-all hover:border-blue-300 hover:bg-blue-50 hover:text-blue-600"
-                  >
-                    <Edit2 size={14} />
-                    수정
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setDeleteConfirm(item)}
-                    className="flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-400 transition-all hover:border-red-300 hover:bg-red-50 hover:text-red-500"
-                  >
-                    <Trash2 size={14} />
-                    삭제
-                  </button>
-                </>
-              ) : (
-                <span className="px-3 py-2 text-xs text-slate-400">
-                  수정·삭제 불가
-                </span>
-              )}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <div
-        className="rounded-2xl p-4 text-sm"
-        style={{ background: "#EFF6FF", border: "1px solid #BFDBFE" }}
+      {/* 테이블 */}
+      <Table
+        loading={loading}
+        skeletonCols={5}
+        empty={!loading && shiftTypes.length === 0 ? '근무 유형이 없습니다' : undefined}
       >
-        <p className="mb-1 font-medium text-blue-700">
-          근무 코드 안내
-        </p>
-        <p className="text-xs leading-relaxed text-blue-600">
-          OFF와 VAC는 시스템 예약 코드입니다. 동일 코드는 중복 등록할 수
-          없으며, 실제 백엔드 연결 후에는 사용 중인 근무 코드는 삭제할 수
-          없도록 처리해야 합니다.
-        </p>
-      </div>
-
-      {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-[480px] rounded-2xl bg-white p-6 shadow-2xl">
-            <div className="mb-5 flex items-center justify-between">
-              <h2
-                className="font-bold text-slate-800"
-                style={{ fontSize: 18 }}
-              >
-                {editing ? "근무 유형 수정" : "근무 유형 추가"}
-              </h2>
-
-              <button
-                type="button"
-                onClick={closeModal}
-                className="flex h-8 w-8 items-center justify-center rounded-xl text-slate-400 transition-colors hover:bg-slate-100"
-              >
-                <X size={16} />
-              </button>
-            </div>
-
-            {error && (
-              <div className="mb-4 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
-                <AlertCircle size={16} className="mt-0.5 shrink-0" />
-                <span>{error}</span>
-              </div>
-            )}
-
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div>
-                  <label className="mb-1.5 block text-sm font-medium text-slate-700">
-                    근무 코드 *
-                  </label>
-                  <input
-                    type="text"
-                    value={form.code}
-                    onChange={(event) =>
-                      updateForm("code", event.target.value.toUpperCase())
-                    }
-                    placeholder="예: D, E, N"
-                    maxLength={5}
-                    disabled={Boolean(editing)}
-                    className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 font-mono text-sm transition-all focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30 disabled:bg-slate-100 disabled:text-slate-400"
-                  />
-                </div>
-
-                <div>
-                  <label className="mb-1.5 block text-sm font-medium text-slate-700">
-                    표시 이름 *
-                  </label>
-                  <input
-                    type="text"
-                    value={form.label}
-                    onChange={(event) =>
-                      updateForm("label", event.target.value)
-                    }
-                    placeholder="예: 주간, 야간"
-                    className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm transition-all focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div>
-                  <label className="mb-1.5 block text-sm font-medium text-slate-700">
-                    시작 시간
-                  </label>
-                  <input
-                    type="time"
-                    value={form.startTime}
-                    disabled={!form.isWorkDay}
-                    onChange={(event) =>
-                      updateForm("startTime", event.target.value)
-                    }
-                    className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm transition-all focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30 disabled:bg-slate-100 disabled:text-slate-400"
-                  />
-                </div>
-
-                <div>
-                  <label className="mb-1.5 block text-sm font-medium text-slate-700">
-                    종료 시간
-                  </label>
-                  <input
-                    type="time"
-                    value={form.endTime}
-                    disabled={!form.isWorkDay}
-                    onChange={(event) =>
-                      updateForm("endTime", event.target.value)
-                    }
-                    className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm transition-all focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30 disabled:bg-slate-100 disabled:text-slate-400"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="mb-1.5 block text-sm font-medium text-slate-700">
-                  캘린더 색상
-                </label>
-
-                <div className="flex flex-wrap items-center gap-3">
-                  <div className="flex flex-wrap gap-2">
-                    {colorPresets.map((color) => (
-                      <button
-                        type="button"
-                        key={color}
-                        onClick={() => updateForm("color", color)}
-                        className="h-7 w-7 rounded-full border-2 transition-all"
-                        style={{
-                          background: color,
-                          borderColor:
-                            form.color === color ? "#1D4ED8" : "transparent",
-                        }}
-                      />
-                    ))}
+        <TableHeader>
+          <tr>
+            <TableHead>코드</TableHead>
+            <TableHead>라벨</TableHead>
+            <TableHead>시간</TableHead>
+            <TableHead>색상</TableHead>
+            <TableHead>관리</TableHead>
+          </tr>
+        </TableHeader>
+        <TableBody>
+          {shiftTypes.map(st => (
+            <TableRow key={st.shift_type_id}>
+              <TableCell>
+                <span className="font-bold text-slate-800">{st.code}</span>
+              </TableCell>
+              <TableCell>{st.label}</TableCell>
+              <TableCell>
+                {st.start_time && st.end_time ? `${st.start_time} ~ ${st.end_time}` : '-'}
+              </TableCell>
+              <TableCell>
+                <div className="w-4 h-4 rounded-full" style={{ backgroundColor: st.color }} />
+              </TableCell>
+              <TableCell>
+                {st.is_system ? (
+                  <span className="text-slate-400 text-sm">🔒</span>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <Button variant="ghost" size="sm" onClick={() => openEdit(st)}>수정</Button>
+                    <Button variant="ghost" size="sm" onClick={() => setDeleteTarget(st)}>삭제</Button>
                   </div>
+                )}
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
 
-                  <input
-                    type="color"
-                    value={form.color}
-                    onChange={(event) =>
-                      updateForm("color", event.target.value)
-                    }
-                    className="h-8 w-8 cursor-pointer rounded-lg border border-slate-200"
-                  />
-                </div>
-              </div>
+      {/* 근무 유형 추가 모달 */}
+      <Modal size="md" open={addOpen} onClose={() => setAddOpen(false)}>
+        <ModalHeader onClose={() => setAddOpen(false)}>근무 유형 추가</ModalHeader>
+        <ModalBody className="space-y-4">
+          <Input
+            label="코드"
+            required
+            placeholder="예: D, E, N"
+            value={addForm.code}
+            onChange={e => setAddForm(f => ({ ...f, code: e.target.value.toUpperCase() }))}
+            helper="대문자 영문과 숫자만, 최대 10자"
+          />
+          <Input
+            label="라벨"
+            required
+            placeholder="예: 주간, 야간"
+            value={addForm.label}
+            onChange={e => setAddForm(f => ({ ...f, label: e.target.value }))}
+          />
+          <TimeFields
+            start={addForm.start_time}
+            end={addForm.end_time}
+            onStartChange={v => setAddForm(f => ({ ...f, start_time: v }))}
+            onEndChange={v => setAddForm(f => ({ ...f, end_time: v }))}
+          />
+          <ColorField
+            value={addForm.color}
+            onChange={v => setAddForm(f => ({ ...f, color: v }))}
+          />
+          <WorkDayToggle
+            value={addForm.is_work_day}
+            onChange={v => setAddForm(f => ({ ...f, is_work_day: v }))}
+          />
+          {addError && <p className="text-sm text-red-500">{addError}</p>}
+        </ModalBody>
+        <ModalFooter>
+          <Button variant="secondary" onClick={() => setAddOpen(false)}>취소</Button>
+          <Button
+            variant="primary"
+            disabled={!addForm.code.trim() || !addForm.label.trim()}
+            loading={addLoading}
+            onClick={handleAdd}
+          >
+            추가
+          </Button>
+        </ModalFooter>
+      </Modal>
 
-              <div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const nextValue = !form.isWorkDay;
-                    setForm((prev) => ({
-                      ...prev,
-                      isWorkDay: nextValue,
-                      startTime: nextValue ? prev.startTime : "",
-                      endTime: nextValue ? prev.endTime : "",
-                    }));
-                    setError("");
-                  }}
-                  className="flex items-center gap-2.5"
-                >
-                  <span
-                    className="relative h-5 w-10 rounded-full transition-all"
-                    style={{
-                      background: form.isWorkDay ? "#3B82F6" : "#CBD5E1",
-                    }}
-                  >
-                    <span
-                      className="absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all"
-                      style={{
-                        left: form.isWorkDay ? "22px" : "2px",
-                      }}
-                    />
-                  </span>
+      {/* 근무 유형 수정 모달 */}
+      <Modal size="md" open={editOpen} onClose={() => setEditOpen(false)}>
+        <ModalHeader onClose={() => setEditOpen(false)}>근무 유형 수정</ModalHeader>
+        <ModalBody className="space-y-4">
+          <Input label="코드" value={editForm.code} readOnly />
+          <Input
+            label="라벨"
+            required
+            value={editForm.label}
+            onChange={e => setEditForm(f => ({ ...f, label: e.target.value }))}
+          />
+          <TimeFields
+            start={editForm.start_time}
+            end={editForm.end_time}
+            onStartChange={v => setEditForm(f => ({ ...f, start_time: v }))}
+            onEndChange={v => setEditForm(f => ({ ...f, end_time: v }))}
+          />
+          <ColorField
+            value={editForm.color}
+            onChange={v => setEditForm(f => ({ ...f, color: v }))}
+          />
+          <WorkDayToggle
+            value={editForm.is_work_day}
+            onChange={v => setEditForm(f => ({ ...f, is_work_day: v }))}
+          />
+          {editError && <p className="text-sm text-red-500">{editError}</p>}
+        </ModalBody>
+        <ModalFooter>
+          <Button variant="secondary" onClick={() => setEditOpen(false)}>취소</Button>
+          <Button
+            variant="primary"
+            disabled={!editForm.label.trim()}
+            loading={editLoading}
+            onClick={handleEdit}
+          >
+            저장
+          </Button>
+        </ModalFooter>
+      </Modal>
 
-                  <span className="text-sm font-medium text-slate-700">
-                    근무일로 설정
-                  </span>
-                </button>
-              </div>
-            </div>
-
-            <div className="mt-6 flex items-center justify-end gap-3">
-              <button
-                type="button"
-                onClick={closeModal}
-                className="rounded-[14px] border border-slate-200 px-5 py-2.5 text-sm text-slate-600 transition-colors hover:bg-slate-50"
-              >
-                취소
-              </button>
-
-              <button
-                type="button"
-                onClick={handleSave}
-                className="flex items-center gap-2 rounded-[14px] px-5 py-2.5 text-sm font-medium text-white transition-all hover:opacity-90"
-                style={{ background: "#3B82F6" }}
-              >
-                <Check size={15} />
-                {editing ? "저장" : "추가"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {deleteConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl">
-            <h2
-              className="mb-2 font-bold text-slate-800"
-              style={{ fontSize: 18 }}
-            >
-              근무 유형 삭제
-            </h2>
-
-            <p className="mb-5 text-sm leading-relaxed text-slate-500">
-              <strong className="text-slate-700">
-                {deleteConfirm.label}({deleteConfirm.code})
-              </strong>
-              을 삭제하시겠습니까?
-              <br />
-              실제 서버 연결 후에는 해당 코드를 사용하는 스케줄이 있으면
-              삭제할 수 없습니다.
-            </p>
-
-            <div className="flex gap-3">
-              <button
-                type="button"
-                onClick={() => setDeleteConfirm(null)}
-                className="flex-1 rounded-[14px] border border-slate-200 py-2.5 text-sm text-slate-600 transition-colors hover:bg-slate-50"
-              >
-                취소
-              </button>
-
-              <button
-                type="button"
-                onClick={handleDelete}
-                className="flex-1 rounded-[14px] py-2.5 text-sm font-medium text-white"
-                style={{ background: "#EF4444" }}
-              >
-                삭제
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* 삭제 확인 모달 */}
+      <Modal size="sm" open={!!deleteTarget} onClose={() => setDeleteTarget(null)}>
+        <ModalHeader onClose={() => setDeleteTarget(null)}>근무 유형 삭제</ModalHeader>
+        <ModalBody>
+          <p className="text-sm text-slate-700">
+            {deleteTarget?.code} ({deleteTarget?.label}) 근무 유형을 삭제하시겠습니까?
+          </p>
+        </ModalBody>
+        <ModalFooter>
+          <Button variant="secondary" onClick={() => setDeleteTarget(null)}>취소</Button>
+          <Button variant="danger" loading={deleteLoading} onClick={handleDelete}>삭제</Button>
+        </ModalFooter>
+      </Modal>
     </div>
-  );
+  )
 }
