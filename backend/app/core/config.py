@@ -7,6 +7,7 @@ class Settings(BaseSettings):
     ADMIN_EMPLOYEE_NO: str
     ADMIN_NAME: str
     ADMIN_PASSWORD: str
+    DEMO_MODE: bool = False
 
     class Config:
         env_file = ".env"

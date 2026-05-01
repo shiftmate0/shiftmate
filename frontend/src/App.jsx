@@ -1,19 +1,17 @@
+// frontend/src/App.jsx
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
-import AppLayout from './components/layout/AppLayout'  // ← 레이아웃 추가
+import AppLayout from './components/layout/AppLayout'
 
-// 공통
 import LoginPage from './pages/LoginPage'
 import ChangePasswordPage from './pages/ChangePasswordPage'
 
-// 관리자
 import AdminDashboardPage from './pages/admin/DashboardPage'
 import AdminEmployeesPage from './pages/admin/EmployeesPage'
 import AdminShiftTypesPage from './pages/admin/ShiftTypesPage'
 import AdminSchedulesPage from './pages/admin/SchedulesPage'
 import AdminRequestsPage from './pages/admin/RequestsPage'
 
-// 직원
 import EmployeeDashboardPage from './pages/employee/DashboardPage'
 import EmployeeSchedulesPage from './pages/employee/SchedulesPage'
 import EmployeeRequestsPage from './pages/employee/RequestsPage'
@@ -21,10 +19,17 @@ import EmployeeSwapRequestsPage from './pages/employee/SwapRequestsPage'
 import EmployeeSwapRequestDetailPage from './pages/employee/SwapRequestDetailPage'
 
 
-// Route Guard: 로그인 여부 체크
 function RequireAuth({ children }) {
-  const { user } = useAuth()
+  const { user, loading } = useAuth()
   const location = useLocation()
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-slate-50">
+        <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    )
+  }
 
   if (!user) {
     return <Navigate to="/login" state={{ from: location }} replace />
@@ -37,22 +42,24 @@ function RequireAuth({ children }) {
   return children
 }
 
-// Route Guard: 관리자 전용
 function RequireAdmin({ children }) {
   const { user } = useAuth()
-  if (user?.role !== 'admin') {
-    return <Navigate to="/employee/dashboard" replace />
-  }
+  if (user?.role !== 'admin') return <Navigate to="/employee/dashboard" replace />
   return children
 }
 
-// Route Guard: 직원 전용
 function RequireEmployee({ children }) {
   const { user } = useAuth()
-  if (user?.role !== 'employee') {
-    return <Navigate to="/admin/dashboard" replace />
-  }
+  if (user?.role !== 'employee') return <Navigate to="/admin/dashboard" replace />
   return children
+}
+
+function RootRedirect() {
+  const { user, loading } = useAuth()
+  if (loading) return null
+  if (!user) return <Navigate to="/login" replace />
+  if (user.role === 'admin') return <Navigate to="/admin/dashboard" replace />
+  return <Navigate to="/employee/dashboard" replace />
 }
 
 
@@ -61,20 +68,12 @@ export default function App() {
     <AuthProvider>
       <BrowserRouter>
         <Routes>
-          {/* 로그인/비밀번호 변경 — 레이아웃 없음 */}
           <Route path="/login" element={<LoginPage />} />
           <Route path="/change-password" element={
             <RequireAuth><ChangePasswordPage /></RequireAuth>
           } />
 
-          {/* 레이아웃 적용 — 사이드바+헤더가 있는 모든 페이지 */}
-          {/* 기존 */}
-          {/* <Route element={<RequireAuth><AppLayout /></RequireAuth>}> */}
-
-          {/* 임시 수정 */}
-          <Route element={<AppLayout />}>
-
-            {/* 관리자 페이지 */}
+          <Route element={<RequireAuth><AppLayout /></RequireAuth>}>
             <Route path="/admin/dashboard" element={
               <RequireAdmin><AdminDashboardPage /></RequireAdmin>
             } />
@@ -91,7 +90,6 @@ export default function App() {
               <RequireAdmin><AdminRequestsPage /></RequireAdmin>
             } />
 
-            {/* 직원 페이지 */}
             <Route path="/employee/dashboard" element={
               <RequireEmployee><EmployeeDashboardPage /></RequireEmployee>
             } />
@@ -107,21 +105,12 @@ export default function App() {
             <Route path="/employee/swap-requests/:id" element={
               <RequireEmployee><EmployeeSwapRequestDetailPage /></RequireEmployee>
             } />
-
           </Route>
 
-          {/* 기본 리다이렉트 */}
           <Route path="/" element={<RootRedirect />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>
   )
-}
-
-function RootRedirect() {
-  const { user } = useAuth()
-  if (!user) return <Navigate to="/login" replace />
-  if (user.role === 'admin') return <Navigate to="/admin/dashboard" replace />
-  return <Navigate to="/employee/dashboard" replace />
 }
