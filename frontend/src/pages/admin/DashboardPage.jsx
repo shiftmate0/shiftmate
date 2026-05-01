@@ -1,16 +1,37 @@
-import { Users, Briefcase, CalendarOff, Clock, ArrowUpRight, CheckCircle, AlertCircle } from 'lucide-react'
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
-import { adminDashboardStats } from '../../api/mocks/mockData'
+import { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
+import { Users, Briefcase, Calendar, Clock, AlertCircle, CheckCircle } from 'lucide-react'
+import {
+  BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+} from 'recharts'
+import { mockAdminDashboard } from '../../api/mocks/dashboard'
+import { mockAdminTimeOffRequests } from '../../api/mocks/timeOffRequests'
+import { MOCK_PERIOD_STATUS } from '../../api/mocks/schedules'
 
 // ── 실제 API로 교체할 때 ────────────────────────────────────
-// import { useState, useEffect } from 'react'
 // import apiClient from '../../api/client'
-// useEffect(() => {
-//   apiClient.get('/admin/dashboard').then(res => setDashboard(res.data))
-// }, [])
+// const { data } = await apiClient.get('/admin/dashboard')
+// 응답: { total_employees, today_working, today_on_leave,
+//          pending_requests, this_week_schedule: [{ date, day, count }] }
 // ──────────────────────────────────────────────────────────
 
-// ── KPI 카드 컴포넌트 ─────────────────────────────────────────
+const TYPE_LABEL = { OFF: '휴무', VAC: '휴가' }
+const TYPE_STYLE = {
+  OFF: { bg: '#EFF6FF', text: '#3B82F6' },
+  VAC: { bg: '#ECFDF5', text: '#059669' },
+}
+
+function formatMD(dateStr) {
+  const [, m, d] = dateStr.split('-')
+  return `${parseInt(m)}/${parseInt(d)}`
+}
+
+function formatDateRange(start, end) {
+  if (!start) return '-'
+  if (start === end) return formatMD(start)
+  return `${formatMD(start)}~${formatMD(end)}`
+}
+
 const KPICard = ({ icon: Icon, label, value, sub, color, bg }) => (
   <div
     className="bg-white rounded-2xl p-6 border border-slate-200 flex items-start gap-4"
@@ -32,200 +53,256 @@ const KPICard = ({ icon: Icon, label, value, sub, color, bg }) => (
   </div>
 )
 
-// ── 상태 색상 매핑 ────────────────────────────────────────────
-const statusColors = {
-  pending:  { bg: '#FEF3C7', text: '#D97706', label: '대기' },
-  approved: { bg: '#ECFDF5', text: '#059669', label: '승인' },
-  rejected: { bg: '#FEF2F2', text: '#DC2626', label: '반려' },
-  accepted: { bg: '#EFF6FF', text: '#3B82F6', label: '합의' },
+const CustomTooltip = ({ active, payload }) => {
+  if (!active || !payload?.length) return null
+  const { day, count } = payload[0].payload
+  return (
+    <div style={{
+      background: '#fff',
+      border: '1px solid #E2E8F0',
+      borderRadius: 12,
+      padding: '8px 12px',
+      fontSize: 12,
+      boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
+    }}>
+      {day}요일: {count}명 근무
+    </div>
+  )
 }
 
 export default function DashboardPage() {
-  // adminDashboardStats에서 직접 데이터 가져오기
-  const {
-    totalEmployees,
-    todayWorkers,
-    todayOffWorkers,
-    pendingRequests,
-    weeklySchedule,
-    recentRequests,
-  } = adminDashboardStats
+  const [dashboard, setDashboard] = useState(null)
+  const [recentRequests, setRecentRequests] = useState([])
+  const [toast, setToast] = useState(null)
 
-  // ── 오늘 날짜 문자열 ───────────────────────────────────────
-  const todayStr = new Date().toLocaleDateString('ko-KR', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-    weekday: 'short',
-  })
+  useEffect(() => {
+    // ── 실제 API 교체 시: apiClient.get('/admin/dashboard').then(res => setDashboard(res.data))
+    setDashboard(mockAdminDashboard)
+    setRecentRequests(
+      mockAdminTimeOffRequests.filter((r) => r.status === 'pending').slice(0, 5)
+    )
+  }, [])
+
+  const showToast = (msg, ok = true) => {
+    setToast({ msg, ok })
+    setTimeout(() => setToast(null), 3000)
+  }
+
+  const handleQuickApprove = (req) => {
+    // ── 실제 API 교체 시: apiClient.patch(`/admin/requests/${req.request_id}/approve`)
+    setRecentRequests((prev) => prev.filter((r) => r.request_id !== req.request_id))
+    showToast(req.type === 'VAC'
+      ? '휴가 신청이 승인되었습니다 (근무표에 VAC가 자동 배정되었습니다)'
+      : '휴무 신청이 승인되었습니다')
+  }
+
+  const handleQuickReject = (req) => {
+    // ── 실제 API 교체 시: apiClient.patch(`/admin/requests/${req.request_id}/reject`)
+    setRecentRequests((prev) => prev.filter((r) => r.request_id !== req.request_id))
+    showToast('신청이 반려되었습니다')
+  }
+
+  if (!dashboard) {
+    return <div className="text-center py-20 text-slate-400 text-sm">불러오는 중...</div>
+  }
+
+  const {
+    total_employees,
+    today_working,
+    today_on_leave,
+    pending_requests,
+    this_week_schedule,
+  } = dashboard
+
+  const now = new Date()
+  const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토']
+  const todayLabel = `${now.getFullYear()}년 ${now.getMonth() + 1}월 ${now.getDate()}일 (${WEEKDAYS[now.getDay()]})`
+  const todayStr = now.toISOString().slice(0, 10)
+
+  const isConfirmed = MOCK_PERIOD_STATUS.is_confirmed
 
   return (
     <div className="space-y-6">
 
-      {/* ── 페이지 타이틀 ───────────────────────────────────── */}
+      {/* ── Toast ─────────────────────────────────────────────── */}
+      {toast && (
+        <div
+          className="fixed top-5 right-5 z-50 flex items-center gap-2 px-4 py-3 rounded-xl shadow-lg text-sm font-medium"
+          style={{
+            background: toast.ok ? '#ECFDF5' : '#FEF2F2',
+            color:      toast.ok ? '#059669' : '#DC2626',
+            border:     `1px solid ${toast.ok ? '#A7F3D0' : '#FECACA'}`,
+          }}
+        >
+          {toast.ok ? <CheckCircle size={16} /> : <AlertCircle size={16} />}
+          {toast.msg}
+        </div>
+      )}
+
+      {/* ── 페이지 타이틀 ─────────────────────────────────────── */}
       <div>
         <h1 className="font-bold text-slate-800" style={{ fontSize: 24 }}>
           관리자 대시보드
         </h1>
         <p className="text-slate-500 text-sm mt-0.5">
-          {todayStr} · 오늘의 근무 현황
+          {todayLabel} · 오늘의 근무 현황
         </p>
       </div>
 
-      {/* ── KPI 카드 4개 ────────────────────────────────────── */}
-      <div className="grid grid-cols-4 gap-6">
+      {/* ── KPI 카드 4개 ─────────────────────────────────────── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         <KPICard
-          icon={Users}
-          label="전체 직원 수"
-          value={totalEmployees}
-          sub="활성 직원 기준"
-          color="#3B82F6"
-          bg="#EFF6FF"
+          icon={Users}    label="전체 직원 수"
+          value={total_employees} sub="활성 직원 기준"
+          color="#3B82F6" bg="#EFF6FF"
         />
         <KPICard
-          icon={Briefcase}
-          label="오늘 근무자"
-          value={todayWorkers}
-          sub="D·E·N 근무 합산"
-          color="#8B5CF6"
-          bg="#F5F3FF"
+          icon={Briefcase} label="오늘 근무자"
+          value={today_working} sub="is_work_day 기준"
+          color="#8B5CF6" bg="#F5F3FF"
         />
         <KPICard
-          icon={CalendarOff}
-          label="오늘 휴무·휴가"
-          value={todayOffWorkers}
-          sub="OFF + VAC"
-          color="#10B981"
-          bg="#ECFDF5"
+          icon={Calendar} label="오늘 휴가자"
+          value={today_on_leave} sub="VAC 코드 기준"
+          color="#10B981" bg="#ECFDF5"
         />
         <KPICard
-          icon={Clock}
-          label="승인 대기"
-          value={pendingRequests}
-          sub="처리 필요한 요청"
-          color="#F59E0B"
-          bg="#FFFBEB"
+          icon={Clock} label="승인 대기"
+          value={pending_requests} sub="처리 필요한 요청"
+          color="#F59E0B" bg="#FEF3C7"
         />
       </div>
 
-      {/* ── 차트 + 최근 요청 ─────────────────────────────────── */}
-      <div className="grid gap-6" style={{ gridTemplateColumns: '60% 1fr' }}>
+      {/* ── 차트 + 최근 요청 ──────────────────────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
 
-        {/* 이번 주 근무 현황 차트 — D/E/N/OFF 4개 막대 */}
+        {/* 이번 주 근무 현황 차트 (60%) */}
         <div
-          className="bg-white rounded-2xl p-6 border border-slate-200"
+          className="lg:col-span-3 bg-white rounded-2xl p-6 border border-slate-200"
           style={{ boxShadow: '0 4px 20px rgba(0,0,0,0.06)' }}
         >
           <div className="flex items-center justify-between mb-6">
             <div>
               <h2 className="font-semibold text-slate-800" style={{ fontSize: 16 }}>
-                이번 주 근무 현황
+                이번 주 근무자 수
               </h2>
-              <p className="text-xs text-slate-400 mt-0.5">4월 14일(월) ~ 4월 20일(일)</p>
+              <p className="text-xs text-slate-400 mt-0.5">
+                {this_week_schedule[0]?.date} ~ {this_week_schedule[6]?.date}
+              </p>
             </div>
-            {/* 범례 */}
-            <div className="flex items-center gap-4 text-xs">
-              {[
-                { color: '#3B82F6', label: '주간(D)' },
-                { color: '#8B5CF6', label: '오후(E)' },
-                { color: '#1D4ED8', label: '야간(N)' },
-                { color: '#CBD5E1', label: '휴무(OFF)' },
-              ].map((l) => (
-                <div key={l.label} className="flex items-center gap-1.5">
-                  <span className="w-3 h-3 rounded-sm" style={{ background: l.color }} />
-                  <span className="text-slate-500">{l.label}</span>
-                </div>
-              ))}
+            <div className="flex items-center gap-3 text-xs text-slate-400">
+              <div className="flex items-center gap-1.5">
+                <span className="w-3 h-3 rounded-sm" style={{ background: '#3B82F6' }} />
+                일반
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="w-3 h-3 rounded-sm" style={{ background: '#8B5CF6' }} />
+                오늘
+              </div>
             </div>
           </div>
 
           <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={weeklySchedule} barSize={12} barGap={3}>
+            <BarChart data={this_week_schedule} barSize={28}>
               <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false} />
               <XAxis
                 dataKey="day"
-                tick={{ fontSize: 11, fill: '#94A3B8' }}
+                tick={{ fontSize: 12, fill: '#94A3B8' }}
                 axisLine={false}
                 tickLine={false}
               />
               <YAxis
-                tick={{ fontSize: 11, fill: '#94A3B8' }}
+                tick={{ fontSize: 12, fill: '#94A3B8' }}
                 axisLine={false}
                 tickLine={false}
                 width={24}
+                allowDecimals={false}
               />
-              <Tooltip
-                contentStyle={{
-                  borderRadius: 12,
-                  border: '1px solid #E2E8F0',
-                  fontSize: 12,
-                  boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
-                }}
-              />
-              <Bar dataKey="D" fill="#3B82F6" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="E" fill="#8B5CF6" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="N" fill="#1D4ED8" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="OFF" fill="#CBD5E1" radius={[4, 4, 0, 0]} />
+              <Tooltip content={<CustomTooltip />} />
+              <Bar dataKey="count" radius={[6, 6, 0, 0]}>
+                {this_week_schedule.map((entry) => (
+                  <Cell
+                    key={entry.date}
+                    fill={entry.date === todayStr ? '#8B5CF6' : '#3B82F6'}
+                  />
+                ))}
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         </div>
 
-        {/* 최근 요청 목록 */}
+        {/* 최근 요청 목록 (40%) */}
         <div
-          className="bg-white rounded-2xl p-6 border border-slate-200"
+          className="lg:col-span-2 bg-white rounded-2xl p-6 border border-slate-200"
           style={{ boxShadow: '0 4px 20px rgba(0,0,0,0.06)' }}
         >
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-semibold text-slate-800" style={{ fontSize: 16 }}>최근 요청</h2>
-            <button
-              className="flex items-center gap-1 text-xs font-medium"
-              style={{ color: '#3B82F6' }}
+            <Link
+              to="/admin/requests"
+              className="text-xs text-blue-500 hover:text-blue-600 transition-colors"
             >
-              전체 보기 <ArrowUpRight size={13} />
-            </button>
+              전체 보기 →
+            </Link>
           </div>
 
-          <div className="space-y-3">
-            {recentRequests.map((req) => {
-              const sc = statusColors[req.status] ?? statusColors.pending
-              return (
-                <div
-                  key={req.id}
-                  className="flex items-start gap-3 p-3 rounded-xl bg-slate-50 hover:bg-slate-100 transition-colors cursor-pointer"
-                >
-                  <div
-                    className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
-                    style={{ background: '#3B82F6' }}
-                  >
-                    {req.name.charAt(0)}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-slate-700 truncate">
-                        {req.name}
-                      </span>
-                      <span
-                        className="text-xs px-2 py-0.5 rounded-full shrink-0"
-                        style={{ background: sc.bg, color: sc.text }}
+          {recentRequests.length === 0 ? (
+            <p className="text-sm text-slate-400 text-center py-8">대기 중인 요청이 없습니다</p>
+          ) : (
+            <div className="space-y-3">
+              {recentRequests.map((req) => {
+                const ts = TYPE_STYLE[req.type] ?? TYPE_STYLE.OFF
+                return (
+                  <div key={req.request_id} className="flex items-center gap-3">
+                    <div
+                      className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
+                      style={{ background: '#3B82F6' }}
+                    >
+                      {req.requester_name?.charAt(0) ?? '?'}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-sm font-medium text-slate-700 truncate">
+                          {req.requester_name}
+                        </span>
+                        <span
+                          className="text-xs px-1.5 py-0.5 rounded-full shrink-0"
+                          style={{ background: ts.bg, color: ts.text }}
+                        >
+                          {TYPE_LABEL[req.type]}
+                        </span>
+                      </div>
+                      <div className="text-xs text-slate-400 mt-0.5">
+                        {formatDateRange(req.start_date, req.end_date)}
+                      </div>
+                    </div>
+                    <div className="flex gap-1 shrink-0">
+                      <button
+                        onClick={() => handleQuickApprove(req)}
+                        className="px-2 py-1 rounded-lg text-xs font-medium text-white"
+                        style={{ background: '#3B82F6' }}
                       >
-                        {sc.label}
-                      </span>
+                        승인
+                      </button>
+                      <button
+                        onClick={() => handleQuickReject(req)}
+                        className="px-2 py-1 rounded-lg text-xs font-medium text-white"
+                        style={{ background: '#EF4444' }}
+                      >
+                        반려
+                      </button>
                     </div>
-                    <div className="text-xs text-slate-500 mt-0.5">
-                      {req.type} · {req.date}
-                    </div>
-                    <div className="text-xs text-slate-400 mt-0.5">{req.createdAt}</div>
                   </div>
-                </div>
-              )
-            })}
-          </div>
+                )
+              })}
+            </div>
+          )}
         </div>
       </div>
 
       {/* ── 알림 배너 ────────────────────────────────────────── */}
       <div className="space-y-3">
-        {pendingRequests > 0 && (
+        {pending_requests > 0 && (
           <div
             className="flex items-start gap-3 p-4 rounded-2xl border"
             style={{ background: '#FFFBEB', borderColor: '#FDE68A' }}
@@ -236,7 +313,7 @@ export default function DashboardPage() {
                 승인 대기 요청 알림
               </p>
               <p className="text-xs mt-0.5" style={{ color: '#B45309' }}>
-                처리 대기 중인 요청이 {pendingRequests}건 있습니다. 요청 관리 화면에서 확인해주세요.
+                처리 대기 중인 요청이 {pending_requests}건 있습니다. 요청 관리 화면에서 확인해주세요.
               </p>
             </div>
           </div>
@@ -244,13 +321,23 @@ export default function DashboardPage() {
 
         <div
           className="flex items-start gap-3 p-4 rounded-2xl border"
-          style={{ background: '#ECFDF5', borderColor: '#A7F3D0' }}
+          style={isConfirmed
+            ? { background: '#EFF6FF', borderColor: '#BFDBFE' }
+            : { background: '#ECFDF5', borderColor: '#A7F3D0' }}
         >
-          <CheckCircle size={18} style={{ color: '#059669' }} className="shrink-0 mt-0.5" />
+          <CheckCircle
+            size={18}
+            style={{ color: isConfirmed ? '#3B82F6' : '#059669' }}
+            className="shrink-0 mt-0.5"
+          />
           <div>
-            <p className="text-sm font-medium" style={{ color: '#065F46' }}>근무표 상태</p>
-            <p className="text-xs mt-0.5" style={{ color: '#047857' }}>
-              근무표 작성 완료 후 확정 처리를 해주세요.
+            <p className="text-sm font-medium" style={{ color: isConfirmed ? '#1E40AF' : '#065F46' }}>
+              근무표 상태
+            </p>
+            <p className="text-xs mt-0.5" style={{ color: isConfirmed ? '#1D4ED8' : '#047857' }}>
+              {isConfirmed
+                ? '이번 달 근무표가 확정되었습니다.'
+                : '근무표 작성 완료 후 확정 처리를 해주세요.'}
             </p>
           </div>
         </div>
