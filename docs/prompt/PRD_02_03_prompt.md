@@ -146,14 +146,20 @@ def seed_shift_types(db: Session):
     생성: "✅ 근무 유형 5개 생성"
     스킵: "ℹ 근무 유형 이미 존재합니다."
 
-def seed_demo_employee(db: Session):
-  동작: DEMO_MODE=true AND employee_no='EMP002' 없을 때만
-  생성: employee_no='EMP002', name='이서윤',
-        password=bcrypt('emp1234!'), role='employee',
-        years_of_experience=3, is_initial_password=False, is_active=True
+def seed_demo_employees(db: Session):
+  동작: DEMO_MODE=true일 때만 실행
+  생성 대상 (각각 없을 때만):
+    EMP002: employee_no='EMP002', name='이서윤',
+            password=bcrypt('emp1234!'), role='employee',
+            years_of_experience=3, is_initial_password=False, is_active=True
+    EMP003: employee_no='EMP003', name='박지호',
+            password=bcrypt('emp1234!'), role='employee',
+            years_of_experience=5, is_initial_password=False, is_active=True
   로그:
-    생성: "✅ 데모 직원 계정 생성: EMP002"
-    스킵: "ℹ EMP002 이미 존재합니다."
+    생성: f"✅ 데모 직원 계정 생성: {employee_no}" (계정별)
+    스킵: f"ℹ {employee_no} 이미 존재합니다." (계정별)
+
+  ※ EMP003은 교대 요청(PRD_07·08) E2E 테스트에 필요한 상대방 직원
 
 main.py startup 이벤트 최종 등록:
   @app.on_event("startup")
@@ -163,7 +169,7 @@ main.py startup 이벤트 최종 등록:
           seed_admin(db)
           seed_system_settings(db)
           seed_shift_types(db)
-          seed_demo_employee(db)
+          seed_demo_employees(db)
       finally:
           db.close()
 
@@ -174,6 +180,6 @@ main.py startup 이벤트 최종 등록:
 - /login 데모 로그인 버튼 동작 확인
 - is_initial_password=true 계정 → /change-password 강제 이동 확인
 - uvicorn 기동 로그 4개 Seed 완료 메시지 확인
-- DB에서 ADMIN001, EMP002, 5개 shift_types, system_settings 존재 확인
+- DB에서 ADMIN001, EMP002, EMP003, 5개 shift_types, system_settings 존재 확인
 - uvicorn 재기동 후 중복 INSERT 없음 확인
 ```
