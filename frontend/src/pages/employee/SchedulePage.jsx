@@ -80,19 +80,19 @@ export default function SchedulePage() {
       });
 
       // react-big-calendar 이벤트 형식으로 변환
-      const mapped = res.data.map((s) => {
-        const colorInfo = shiftColorMap[s.shift_type.code] ?? { color: "#9CA3AF", label: s.shift_type.code };
+      const mapped = res.schedules.map((s) => {
+        const colorInfo = shiftColorMap[s.shift_code] ?? { color: "#9CA3AF", label: s.shift_code };
         return {
           id: s.schedule_id,
           title: isAdmin
-            ? `${s.user_name} · ${s.shift_type.label}`
-            : s.shift_type.label,
+            ? `${s.user_name} · ${s.shift_label}`
+            : s.shift_label,
           start: new Date(s.work_date),
           end:   new Date(s.work_date),
           allDay: true,
           resource: {
-            shiftCode: s.shift_type.code,
-            color: s.shift_type.color || colorInfo.color,
+            shiftCode: s.shift_code,
+            color: s.shift_color || colorInfo.color,
             isLocked: s.is_locked,
             userId: s.user_id,
             userName: s.user_name,
@@ -101,6 +101,7 @@ export default function SchedulePage() {
       });
 
       setEvents(mapped);
+      setIsConfirmed(res.period_status === "confirmed");
     } catch (err) {
       console.error("근무표 로드 실패:", err);
     } finally {
@@ -271,10 +272,10 @@ export default function SchedulePage() {
 function WarnModal({ warnings, onCancel, onForceConfirm, loading }) {
   const TYPE_LABEL = {
     consecutive_night: "연속 야간근무",
-    post_night_day:    "야간 후 주간 배정",
-    understaffed:      "최소 인원 미달",
-    low_avg_years:     "평균 연차 부족",
-    overloaded:        "근무 편중",
+    night_to_day:      "야간 후 주간 배정",
+    min_staff:         "최소 인원 미달",
+    avg_years:         "평균 연차 부족",
+    workload_bias:     "근무 편중",
   };
 
   return (

@@ -43,10 +43,10 @@ export const deleteSchedule = async (scheduleId) => {
 };
 
 // ── 월 확정 ───────────────────────────────────────────
-export const confirmSchedule = async (year, month) => {
+export const confirmSchedule = async (year, month, force = false) => {
   const { data } = await apiClient.post(
     `/admin/schedules/${year}/${month}/confirm`,
-    {}
+    { force }
   );
   return data; // { period_id, year, month, status, confirmed_at, confirmed_by }
 };
