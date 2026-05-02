@@ -208,7 +208,7 @@ GET /api/swap-requests/{id}
     swap_request_id, requester_id, requester_name,
     requester_schedule_id, work_date, shift_code, shift_color, shift_label,
     requester_years_at_request, required_years_min, required_years_max,
-    status, accepted_proposal_id, expires_at, created_at,
+    status, accepted_proposal_id, admin_comment, expires_at, created_at,
     proposals: [{
       swap_proposal_id, proposer_id, proposer_name,
       proposer_schedule_id, proposer_work_date,
@@ -324,7 +324,7 @@ PATCH /api/admin/swap-requests/{id}/reject
     404: 없음
     400: status not in ('pending','accepted') → "이미 처리된 요청입니다"
   단일 트랜잭션:
-    swap_requests UPDATE status='rejected', updated_at=now()
+    swap_requests UPDATE status='rejected', admin_comment={요청값}, updated_at=now()
     requester_schedule UPDATE is_locked=False
     status='accepted' 분기:
       accepted_proposal의 proposer_schedule UPDATE is_locked=False

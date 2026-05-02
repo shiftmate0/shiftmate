@@ -29,7 +29,7 @@ PRD_10이 완료되었고, 팀장이 PRD_13 BE API를 완성하여 알림을 보
 
 교대 반려 사유 모달 (Modal size="sm"):
   textarea + [반려 확정] →
-    PATCH /api/admin/swap-requests/{id}/reject
+    PATCH /api/admin/swap-requests/{id}/reject  { admin_comment: <입력값> }
     성공: Toast "교대 요청이 반려되었습니다"
 
 "준비 중입니다" Toast 코드 제거 (실제 API로 교체)

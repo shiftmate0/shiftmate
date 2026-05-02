@@ -254,6 +254,7 @@ def get_swap_request(
         "required_years_max": swap_req.required_years_max,
         "status": swap_req.status,
         "accepted_proposal_id": swap_req.accepted_proposal_id,
+        "admin_comment": swap_req.admin_comment,
         "expires_at": swap_req.expires_at,
         "created_at": swap_req.created_at,
         "proposals": proposals,
@@ -527,7 +528,7 @@ def approve_swap_request(
 
     now = datetime.now()
     swap_req.status = "approved"
-    swap_req.accepted_at = now
+    swap_req.updated_at = now
     db.commit()
 
     return {
@@ -560,6 +561,8 @@ def reject_swap_request_admin(
     was_accepted = swap_req.status == "accepted"
 
     swap_req.status = "rejected"
+    swap_req.admin_comment = body.admin_comment
+    swap_req.updated_at = now
 
     # requester 스케줄 잠금 해제
     req_schedule = db.query(Schedule).filter(
