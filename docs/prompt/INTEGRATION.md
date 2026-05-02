@@ -191,6 +191,7 @@ time:      "HH:MM"              예: "08:00"
 ### 4-2. 공유 응답 필드명 (전 API 통일)
 ```
 사용자 ID:     user_id
+사용자 이름:   user_name
 직원 번호:     employee_no
 근무 유형 ID:  shift_type_id
 근무 코드:     shift_code
@@ -213,6 +214,7 @@ time:      "HH:MM"              예: "08:00"
     {
       "schedule_id": 1,
       "user_id": 2,
+      "user_name": "이서윤",
       "work_date": "2026-05-01",
       "shift_type_id": 1,
       "shift_code": "D",
@@ -223,6 +225,29 @@ time:      "HH:MM"              예: "08:00"
   ]
 }
 ```
+
+### 4-7. GET /api/admin/schedules/validate 응답 구조 (확정)
+사용자3 구현 — 사용자2 참조 (확정 전 검증 플로우)
+```json
+{
+  "year": 2026,
+  "month": 5,
+  "is_valid": true,
+  "has_warnings": false,
+  "warnings": [
+    {
+      "type": "consecutive_night | night_to_day | min_staff | avg_years | workload_bias",
+      "message": "경고 메시지",
+      "affected_date": "2026-05-01",
+      "affected_user_name": "이서윤"
+    }
+  ]
+}
+```
+- `is_valid`: 경고 없이 즉시 확정 가능 여부
+- `has_warnings`: 경고 존재 여부 (경고가 있어도 force=true로 강제 확정 가능)
+- `affected_date`: 날짜 관련 경고(min_staff, workload_bias)에서 사용
+- `affected_user_name`: 개인 관련 경고(consecutive_night, night_to_day, avg_years)에서 사용
 
 ### 4-4. schedule_service.py 공유 함수 (확정)
 ```

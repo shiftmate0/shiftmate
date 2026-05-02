@@ -128,7 +128,7 @@ GET /api/admin/schedules/validate
   권한: require_admin
   파라미터: year(필수), month(필수)
   처리: validation.py 의 validate_schedule 호출 (PRD_07에서 구현)
-  응답 200: { year, month, is_valid, warnings: [...] }
+  응답 200: { year, month, is_valid, has_warnings, warnings: [...] }
   (Day 3 AM 전까지 빈 warnings 반환하는 placeholder로 구현)
 
 라우터 등록 요청: 사용자1에게
@@ -223,10 +223,10 @@ def _check_consecutive_night(schedules, settings):
               if count >= settings.max_consecutive_night:
                   warnings.append({
                       "type": "consecutive_night",
-                      "message": f"{users_map.get(user_id, {}).get('name', user_id)}: {start_date}~{end_date} 야간근무 {count}일 연속 (최대 {settings.max_consecutive_night}일)",
-                      "date": str(start_date),
-                      "user_id": user_id,
-                      "name": None  # 호출 시 users로부터 채움
+                      "message": f"{name}: {start_date}~{end_date} 야간근무 {count}일 연속 (최대 {settings.max_consecutive_night}일)",
+                      "affected_date": str(start_date),
+                      "affected_user_id": user_id,
+                      "affected_user_name": name,
                   })
               count = 0
               start_date = None
@@ -255,10 +255,10 @@ def _check_night_to_day(schedules):
           if next_code == 'D':
               warnings.append({
                   "type": "night_to_day",
-                  "message": f"{{name}}: {work_date} 야간 후 {next_date} 주간 배정",
-                  "date": str(next_date),
-                  "user_id": user_id,
-                  "name": None
+                  "message": f"{name}: {work_date} 야간 후 {next_date} 주간 배정",
+                  "affected_date": str(next_date),
+                  "affected_user_id": user_id,
+                  "affected_user_name": name,
               })
   return warnings
 
@@ -280,9 +280,9 @@ def _check_min_staff(schedules, settings):
           warnings.append({
               "type": "min_staff",
               "message": f"{work_date}: 근무 인원 {count}명 (최소 {settings.min_daily_staff}명 필요)",
-              "date": str(work_date),
-              "user_id": None,
-              "name": None
+              "affected_date": str(work_date),
+              "affected_user_id": None,
+              "affected_user_name": None,
           })
   return warnings
 
@@ -314,9 +314,9 @@ def _check_avg_years(schedules, users, settings):
           warnings.append({
               "type": "avg_years",
               "message": f"{work_date} {code} 팀: 평균 연차 {avg:.1f}년 (최소 {settings.min_avg_years}년 필요)",
-              "date": str(work_date),
-              "user_id": None,
-              "name": None
+              "affected_date": str(work_date),
+              "affected_user_id": None,
+              "affected_user_name": None,
           })
   return warnings
 
@@ -346,9 +346,9 @@ def _check_workload_bias(schedules, users):
           warnings.append({
               "type": "workload_bias",
               "message": f"{name}: 이번 달 근무 {count}일 (팀 평균 {avg:.1f}일 대비 {diff:.0f}일 초과)",
-              "date": None,
-              "user_id": user_id,
-              "name": str(name)
+              "affected_date": None,
+              "affected_user_id": user_id,
+              "affected_user_name": name,
           })
   return warnings
 

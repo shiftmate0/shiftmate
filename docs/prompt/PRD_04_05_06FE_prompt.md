@@ -260,11 +260,14 @@ Table:
 사용자3(멤버2)이 PRD_06 BE를 완료했고 아래 API가 사용 가능해:
   GET /api/schedules?year={년}&month={월}
     응답: { period_status: "draft"|"confirmed", schedules: [...] }
+    schedules 항목: { schedule_id, user_id, user_name, work_date, shift_type_id,
+                      shift_code, shift_color, shift_label, is_locked }
   GET /api/schedules/me?year={년}&month={월}
   POST /api/admin/schedules/bulk
   PUT /api/admin/schedules/{id}
   POST /api/admin/schedules/{year}/{month}/confirm
   GET /api/admin/schedules/validate (Day 3 AM 사용 가능)
+    응답: { year, month, is_valid, has_warnings, warnings: [{ type, message, affected_date, affected_user_id, affected_user_name }] }
 
 지금 PRD_06 Schedule Write FE 를 구현해.
 
@@ -349,8 +352,8 @@ PageHeader:
     is_valid=false: 경고 목록
       배경 #FEF3C7, 텍스트 #D97706
       • {message} (type별 포맷:
-        consecutive_night/night_to_day/workload_bias → "• {name}: {message}"
-        min_staff/avg_years → "• {date}: {message}")
+        consecutive_night/night_to_day/workload_bias → "• {affected_user_name}: {message}"
+        min_staff/avg_years → "• {affected_date}: {message}")
 
 확정 흐름 ([확정하기] 버튼):
   async handleConfirm():
