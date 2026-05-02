@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, Enum, ForeignKey, TIMESTAMP
+from sqlalchemy import Column, Integer, Enum, ForeignKey, String, TIMESTAMP
 from sqlalchemy.sql import func
 from app.core.database import Base
 
@@ -19,5 +19,7 @@ class SwapRequest(Base):
     )
     accepted_proposal_id = Column(Integer, ForeignKey("swap_proposals.swap_proposal_id"), nullable=True)
     accepted_at = Column(TIMESTAMP(timezone=True), nullable=True)
+    admin_comment = Column(String(500), nullable=True)
     expires_at = Column(TIMESTAMP(timezone=True), nullable=False)
     created_at = Column(TIMESTAMP(timezone=True), nullable=False, server_default=func.now())
+    updated_at = Column(TIMESTAMP(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
