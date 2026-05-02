@@ -429,7 +429,7 @@
 
 | 구분 | 하는 일 | 비고 |
 |---|---|---|
-| 근무표 일괄 저장 API | 여러 날짜를 한 번에 저장 (있으면 수정, 없으면 추가) | PostgreSQL upsert 사용 |
+| 근무표 일괄 저장 API | 여러 날짜를 한 번에 저장 (있으면 수정, 없으면 추가) | MySQL upsert 사용 |
 | 근무표 조회 API | 연도·월 기준 전체 또는 내 것만 조회 | |
 | 근무표 단건 수정 API | 특정 날짜 근무 코드 변경 | |
 | 월 확정 API | schedule_periods 테이블에 confirmed 레코드 생성 | |
@@ -775,7 +775,7 @@ npm run dev
 ```
 나는 ShiftMate 프로젝트의 [멤버 1 / 멤버 2 / 멤버 3]이야.
 기술 스택:
-- 백엔드: FastAPI, SQLAlchemy, PostgreSQL
+- 백엔드: FastAPI, SQLAlchemy, MySQL
 - 프론트엔드: React (Vite), Axios, Tailwind CSS, Context API
 
 지금 [GET /api/admin/employees] API를 만들어줘.

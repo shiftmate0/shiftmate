@@ -196,7 +196,7 @@
 | A3 | 근무표 수정 | 확정 전·후 근무표 수정 가능 |
 | A4 | 지난 근무표 조회 | 과거 월별 근무표 조회 |
 | A5 | 근무표 자동 검증 | 연속 야간근무, 인원 부족, 팀 평균 연차 부족 등 기본 검증 경고 |
-| A6 | 요청 승인/반려 | 휴무·휴가·교대 요청을 승인 또는 반려. VAC 승인 시 해당 날짜에 VAC 코드 자동 배정. 기존 D/E/N 코드와 충돌 시 관리자에게 확인 모달 표시 후 처리 |
+| A6 | 요청 승인/반려 | 휴무·휴가·교대 요청을 승인 또는 반려. VAC 승인 시 해당 날짜에 VAC 코드 자동 배정. 기존 D/E/N 코드와 충돌 시 관리자에게 확인 모달 표시 후 처리. VAC 승인 대상 날짜 범위 내에 `is_locked=true`인 스케줄이 존재하면 HTTP 409를 반환하며 승인이 차단된다 |
 | A10 | 근무 유형 관리 | 근무 코드 추가·수정. 코드명·시간·색상 설정 가능. OFF·VAC는 수정·삭제 불가. 사용 중인 코드는 삭제 불가 |
 
 ---
@@ -209,7 +209,7 @@
 2. 관리자는 신청 내역을 확인한다.
 3. 관리자는 승인 또는 반려 처리한다.
 4. 승인된 휴무·휴가는 근무표 작성 시 참고된다.
-5. VAC 승인 시, 해당 날짜 범위의 각 날짜에 대해 `schedules` 레코드를 VAC 코드로 INSERT(미배정) 또는 UPDATE(기존 코드 존재)한다. `time_off_requests.status` 업데이트와 `schedules` VAC 배정은 단일 트랜잭션으로 처리된다.
+5. VAC 승인 시, 서버는 먼저 해당 날짜 범위 내에 `is_locked=true`인 스케줄이 있는지 확인하며, 존재하면 HTTP 409를 반환하고 승인을 차단한다. 충돌이 없으면 각 날짜에 대해 `schedules` 레코드를 VAC 코드로 INSERT(미배정) 또는 UPDATE(기존 코드 존재)한다. `time_off_requests.status` 업데이트와 `schedules` VAC 배정은 단일 트랜잭션으로 처리된다.
 6. 기존 D/E/N 코드가 있는 날짜에 VAC를 배정할 경우, 관리자에게 확인 모달을 표시한다. 확인 시 덮어쓰기한다.
 7. 근무표 확정 후 신청된 경우, 관리자가 승인하고 근무표를 수동으로 수정한다.
 
@@ -578,13 +578,13 @@ pending
 - Passlib + bcrypt (비밀번호 해시)
 
 ### Database
-- PostgreSQL
+- MySQL
 - 개발 초기에는 SQLite 사용 가능
-- 최종 구조는 PostgreSQL 기준 설계
+- 최종 구조는 MySQL 기준 설계
 
 ### Deployment
 - Docker
-- Docker Compose (FastAPI + PostgreSQL 컨테이너 구성)
+- Docker Compose (FastAPI + MySQL 컨테이너 구성)
 - 초기 관리자 계정은 `.env` 파일의 환경변수로 관리
 - AWS EC2 + RDS 확장 가능
 
@@ -596,7 +596,7 @@ pending
 
 ### 1단계: 기본 구조
 - React + FastAPI 프로젝트 생성
-- PostgreSQL 연결 및 테이블 생성 (신규 테이블: `schedule_periods` 포함)
+- MySQL 연결 및 테이블 생성 (신규 테이블: `schedule_periods` 포함)
 - DB 레벨 제약 조건 적용 (`employee_no UNIQUE`, `shift_types.code UNIQUE`)
 - 로그인 및 JWT 인증 구현
 - 권한 분리 구현

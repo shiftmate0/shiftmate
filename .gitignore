@@ -38,7 +38,6 @@ dist-ssr/
 *.local
 
 # 환경 변수
-.env
 .env.local
 .env.development.local
 .env.test.local
@@ -66,9 +65,5 @@ desktop.ini
 .idea/
 *.swp
 *.swo
-
-# Venv/Node_modules
-/venv/
-/node_modules/
 
 .claude/
