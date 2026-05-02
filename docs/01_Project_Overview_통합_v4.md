@@ -64,7 +64,7 @@
 
 - Docker Compose의 `.env` 파일에 `ADMIN_EMPLOYEE_NO`, `ADMIN_NAME`, `ADMIN_PASSWORD` 환경변수를 정의한다.
 - 애플리케이션 기동 시 `users` 테이블에 `role = admin`인 계정이 존재하지 않으면 자동 생성한다.
-- 초기 관리자 비밀번호는 bcrypt 해시로 저장되며, 첫 로그인 후 반드시 변경해야 한다 (`is_initial_password = true`).
+- 초기 관리자 비밀번호는 bcrypt 해시로 저장된다 (`is_initial_password = false`).
 - 이미 admin 계정이 존재하면 이 절차는 실행되지 않는다 (멱등성 보장).
 
 ---
