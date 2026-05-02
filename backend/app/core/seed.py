@@ -13,8 +13,14 @@ def seed_admin(db: Session) -> None:
         print("⚠ ADMIN 환경변수 미설정. 관리자 Seed를 건너뜁니다.")
         return
 
-    if db.query(User).filter(User.role == "admin").count() > 0:
-        print("ℹ 관리자 계정 이미 존재합니다. Seed를 건너뜁니다.")
+    existing_admin = db.query(User).filter(User.role == "admin").first()
+    if existing_admin:
+        if existing_admin.is_initial_password:
+            existing_admin.is_initial_password = False
+            db.commit()
+            print("ℹ 관리자 계정 is_initial_password → False 업데이트")
+        else:
+            print("ℹ 관리자 계정 이미 존재합니다. Seed를 건너뜁니다.")
         return
 
     db.add(User(
@@ -22,7 +28,7 @@ def seed_admin(db: Session) -> None:
         name=settings.ADMIN_NAME,
         password=hash_password(settings.ADMIN_PASSWORD),
         role="admin",
-        is_initial_password=True,
+        is_initial_password=False,
         is_active=True,
         years_of_experience=0,
     ))
