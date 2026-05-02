@@ -103,6 +103,7 @@
      status ENUM('pending','accepted','approved','rejected','expired') NOT NULL DEFAULT 'pending'
      accepted_proposal_id INT NULL
      accepted_at TIMESTAMP NULL
+     admin_comment TEXT NULL
      expires_at TIMESTAMP NOT NULL
      created_at TIMESTAMP DEFAULT now()
      updated_at TIMESTAMP DEFAULT now()
