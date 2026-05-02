@@ -96,7 +96,7 @@ function ProposalItem({ proposal, isSelected, isRequester, onSelect }) {
 
 // ── 요청자 뷰 ──────────────────────────────────────────────────────────────
 function RequesterView({ detail, onSelectProposal }) {
-  const { status, proposals, accepted_proposal_id } = detail
+  const { status, proposals, accepted_proposal_id, admin_comment } = detail
 
   if (status === 'approved') {
     return (
@@ -119,6 +119,9 @@ function RequesterView({ detail, onSelectProposal }) {
       >
         <p className="text-2xl mb-2">❌</p>
         <p className="font-semibold text-red-700">관리자가 반려했습니다</p>
+        {admin_comment && (
+          <p className="text-sm text-red-600 mt-1">사유: {admin_comment}</p>
+        )}
       </div>
     )
   }

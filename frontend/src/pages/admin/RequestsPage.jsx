@@ -11,7 +11,7 @@ import { mockAdminTimeOffRequests, mockAdminSwapRequests } from '../../api/mocks
 // PATCH /admin/requests/:id/reject   { admin_comment }
 // GET  /swap-requests (팀장 API)
 // PATCH /admin/swap-requests/:id/approve → 409: "처리 중 충돌이 발생했습니다. 다시 시도해 주세요"
-// PATCH /admin/swap-requests/:id/reject  { reason }
+// PATCH /admin/swap-requests/:id/reject  { admin_comment }
 // ──────────────────────────────────────────────────────────
 
 const STATUS_CONFIG = {
@@ -191,7 +191,7 @@ export default function AdminRequestsPage() {
       return
     }
     const req = swapRejectTarget
-    // ── 실제 API 교체 시: await apiClient.patch(`/admin/swap-requests/${req.swap_request_id}/reject`, { reason: swapRejectReason })
+    // ── 실제 API 교체 시: await apiClient.patch(`/admin/swap-requests/${req.swap_request_id}/reject`, { admin_comment: swapRejectReason })
     setSwapList((prev) =>
       prev.map((r) =>
         r.swap_request_id === req.swap_request_id
