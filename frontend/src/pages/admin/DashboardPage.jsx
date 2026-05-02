@@ -4,16 +4,7 @@ import { Users, Briefcase, Calendar, Clock, AlertCircle, CheckCircle } from 'luc
 import {
   BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts'
-import { mockAdminDashboard } from '../../api/mocks/dashboard'
-import { mockAdminTimeOffRequests } from '../../api/mocks/timeOffRequests'
-import { mockSchedulesMeta } from '../../api/mocks/schedules'
-
-// ── 실제 API로 교체할 때 ────────────────────────────────────
-// import apiClient from '../../api/client'
-// const { data } = await apiClient.get('/admin/dashboard')
-// 응답: { total_employees, today_working, today_on_leave,
-//          pending_requests, this_week_schedule: [{ date, day, count }] }
-// ──────────────────────────────────────────────────────────
+import apiClient from '../../api/client'
 
 const TYPE_LABEL = { OFF: '휴무', VAC: '휴가' }
 const TYPE_STYLE = {
@@ -71,16 +62,45 @@ const CustomTooltip = ({ active, payload }) => {
 }
 
 export default function DashboardPage() {
-  const [dashboard, setDashboard] = useState(null)
+  const [dashboard, setDashboard]         = useState(null)
   const [recentRequests, setRecentRequests] = useState([])
-  const [toast, setToast] = useState(null)
+  const [isConfirmed, setIsConfirmed]     = useState(false)
+  const [toast, setToast]                 = useState(null)
+
+  const fetchDashboard = async () => {
+    try {
+      const { data } = await apiClient.get('/admin/dashboard')
+      setDashboard(data)
+    } catch {
+      showToast('대시보드 데이터를 불러오지 못했습니다', false)
+    }
+  }
+
+  const fetchRecentRequests = async () => {
+    try {
+      const { data } = await apiClient.get('/admin/requests', { params: { status: 'pending' } })
+      setRecentRequests(data.slice(0, 5))
+    } catch {
+      // 실패해도 대시보드는 계속 표시
+    }
+  }
+
+  const fetchScheduleStatus = async () => {
+    try {
+      const now = new Date()
+      const { data } = await apiClient.get('/schedules', {
+        params: { year: now.getFullYear(), month: now.getMonth() + 1 },
+      })
+      setIsConfirmed(data?.period_status === 'confirmed')
+    } catch {
+      // schedule period 없으면 미확정 상태로 표시
+    }
+  }
 
   useEffect(() => {
-    // ── 실제 API 교체 시: apiClient.get('/admin/dashboard').then(res => setDashboard(res.data))
-    setDashboard(mockAdminDashboard)
-    setRecentRequests(
-      mockAdminTimeOffRequests.filter((r) => r.status === 'pending').slice(0, 5)
-    )
+    fetchDashboard()
+    fetchRecentRequests()
+    fetchScheduleStatus()
   }, [])
 
   const showToast = (msg, ok = true) => {
@@ -88,18 +108,28 @@ export default function DashboardPage() {
     setTimeout(() => setToast(null), 3000)
   }
 
-  const handleQuickApprove = (req) => {
-    // ── 실제 API 교체 시: apiClient.patch(`/admin/requests/${req.request_id}/approve`)
-    setRecentRequests((prev) => prev.filter((r) => r.request_id !== req.request_id))
-    showToast(req.type === 'VAC'
-      ? '휴가 신청이 승인되었습니다 (근무표에 VAC가 자동 배정되었습니다)'
-      : '휴무 신청이 승인되었습니다')
+  const handleQuickApprove = async (req) => {
+    try {
+      await apiClient.patch(`/admin/requests/${req.request_id}/approve`, { admin_comment: null })
+      setRecentRequests((prev) => prev.filter((r) => r.request_id !== req.request_id))
+      showToast(req.type === 'VAC'
+        ? '휴가 신청이 승인되었습니다 (근무표에 VAC가 자동 배정되었습니다)'
+        : '휴무 신청이 승인되었습니다')
+      fetchDashboard()
+    } catch (err) {
+      showToast(err.response?.data?.detail ?? '승인에 실패했습니다', false)
+    }
   }
 
-  const handleQuickReject = (req) => {
-    // ── 실제 API 교체 시: apiClient.patch(`/admin/requests/${req.request_id}/reject`)
-    setRecentRequests((prev) => prev.filter((r) => r.request_id !== req.request_id))
-    showToast('신청이 반려되었습니다')
+  const handleQuickReject = async (req) => {
+    try {
+      await apiClient.patch(`/admin/requests/${req.request_id}/reject`, { admin_comment: '관리자 반려' })
+      setRecentRequests((prev) => prev.filter((r) => r.request_id !== req.request_id))
+      showToast('신청이 반려되었습니다')
+      fetchDashboard()
+    } catch (err) {
+      showToast(err.response?.data?.detail ?? '반려에 실패했습니다', false)
+    }
   }
 
   if (!dashboard) {
@@ -119,12 +149,9 @@ export default function DashboardPage() {
   const todayLabel = `${now.getFullYear()}년 ${now.getMonth() + 1}월 ${now.getDate()}일 (${WEEKDAYS[now.getDay()]})`
   const todayStr = now.toISOString().slice(0, 10)
 
-  const isConfirmed = mockSchedulesMeta.period_status == 'confirmed'
-
   return (
     <div className="space-y-6">
 
-      {/* ── Toast ─────────────────────────────────────────────── */}
       {toast && (
         <div
           className="fixed top-5 right-5 z-50 flex items-center gap-2 px-4 py-3 rounded-xl shadow-lg text-sm font-medium"
@@ -139,7 +166,6 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* ── 페이지 타이틀 ─────────────────────────────────────── */}
       <div>
         <h1 className="font-bold text-slate-800" style={{ fontSize: 24 }}>
           관리자 대시보드
@@ -149,7 +175,6 @@ export default function DashboardPage() {
         </p>
       </div>
 
-      {/* ── KPI 카드 4개 ─────────────────────────────────────── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         <KPICard
           icon={Users}    label="전체 직원 수"
@@ -173,10 +198,8 @@ export default function DashboardPage() {
         />
       </div>
 
-      {/* ── 차트 + 최근 요청 ──────────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
 
-        {/* 이번 주 근무 현황 차트 (60%) */}
         <div
           className="lg:col-span-3 bg-white rounded-2xl p-6 border border-slate-200"
           style={{ boxShadow: '0 4px 20px rgba(0,0,0,0.06)' }}
@@ -231,7 +254,6 @@ export default function DashboardPage() {
           </ResponsiveContainer>
         </div>
 
-        {/* 최근 요청 목록 (40%) */}
         <div
           className="lg:col-span-2 bg-white rounded-2xl p-6 border border-slate-200"
           style={{ boxShadow: '0 4px 20px rgba(0,0,0,0.06)' }}
@@ -300,7 +322,6 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* ── 알림 배너 ────────────────────────────────────────── */}
       <div className="space-y-3">
         {pending_requests > 0 && (
           <div
