@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Plus } from 'lucide-react'
 import apiClient from '../../api/client'
-import { mockShiftTypes } from '../../api/mocks/shiftTypes'
 import Modal, { ModalHeader, ModalBody, ModalFooter } from '../../components/Modal'
 import Button from '../../components/Button'
 import Input from '../../components/Input'
@@ -77,7 +76,7 @@ function validateTime(start, end) {
 
 export default function ShiftTypesPage() {
   const toast = useToast()
-  const [shiftTypes, setShiftTypes] = useState(mockShiftTypes)
+  const [shiftTypes, setShiftTypes] = useState([])
   const [loading, setLoading] = useState(true)
 
   const [addOpen, setAddOpen] = useState(false)
@@ -102,7 +101,7 @@ export default function ShiftTypesPage() {
       const { data } = await apiClient.get('/admin/shift-types')
       setShiftTypes(data)
     } catch {
-      // mock 유지
+      toast.error('근무 유형 목록을 불러오지 못했습니다')
     } finally {
       setLoading(false)
     }

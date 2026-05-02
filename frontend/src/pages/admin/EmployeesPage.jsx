@@ -1,7 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { Plus, Copy } from 'lucide-react'
 import apiClient from '../../api/client'
-import { mockEmployees } from '../../api/mocks/employees'
 import Modal, { ModalHeader, ModalBody, ModalFooter } from '../../components/Modal'
 import Button from '../../components/Button'
 import Badge from '../../components/Badge'
@@ -15,7 +14,7 @@ const defaultEditForm = { name: '', years_of_experience: 0, role: 'employee', is
 export default function EmployeesPage() {
   const toast = useToast()
 
-  const [employees, setEmployees] = useState(mockEmployees)
+  const [employees, setEmployees] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [filterRole, setFilterRole] = useState('all')
@@ -46,7 +45,7 @@ export default function EmployeesPage() {
       const { data } = await apiClient.get('/admin/employees')
       setEmployees(data)
     } catch {
-      // mock 데이터 유지
+      toast.error('직원 목록을 불러오지 못했습니다')
     } finally {
       setLoading(false)
     }
