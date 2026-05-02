@@ -14,17 +14,10 @@ import moment from "moment";
 import "moment/locale/ko";
 import "react-big-calendar/lib/css/react-big-calendar.css";
 import apiClient from "../../api/client";
-import { mockShiftTypes } from "../../api/mocks/shiftTypes";
 
 moment.locale("ko");
 const localizer = momentLocalizer(moment);
 const DAY_NAMES_KO = ["일", "월", "화", "수", "목", "금", "토"];
-
-// OFF/VAC는 시간 미표시
-const SHIFT_TIME_MAP = mockShiftTypes.reduce((acc, st) => {
-  if (st.start_time) acc[st.code] = { start: st.start_time, end: st.end_time };
-  return acc;
-}, {});
 
 export default function SchedulesPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -32,10 +25,22 @@ export default function SchedulesPage() {
   const year  = parseInt(searchParams.get("year"))  || now.getFullYear();
   const month = parseInt(searchParams.get("month")) || now.getMonth() + 1;
 
-  const [schedules, setSchedules] = useState([]);
-  const [loading, setLoading]     = useState(false);
-  const [popover, setPopover]     = useState(null);
+  const [schedules, setSchedules]   = useState([]);
+  const [shiftTimeMap, setShiftTimeMap] = useState({});
+  const [loading, setLoading]       = useState(false);
+  const [popover, setPopover]       = useState(null);
   const popoverRef = useRef(null);
+
+  // ── 근무 유형 로드 (최초 1회) ─────────────────────
+  useEffect(() => {
+    apiClient.get("/admin/shift-types").then((res) => {
+      const map = {};
+      (res.data || []).forEach((st) => {
+        if (st.start_time) map[st.code] = { start: st.start_time, end: st.end_time };
+      });
+      setShiftTimeMap(map);
+    }).catch(() => {});
+  }, []);
 
   // ── 근무표 조회 ───────────────────────────────────
   useEffect(() => {
@@ -218,10 +223,10 @@ export default function SchedulesPage() {
                   {popover.schedule.shift_code} {popover.schedule.shift_label}
                 </span>
               </div>
-              {SHIFT_TIME_MAP[popover.schedule.shift_code] && (
+              {shiftTimeMap[popover.schedule.shift_code] && (
                 <div style={{ fontSize: 13, color: "#6B7280" }}>
-                  시간: {SHIFT_TIME_MAP[popover.schedule.shift_code].start} ~{" "}
-                  {SHIFT_TIME_MAP[popover.schedule.shift_code].end}
+                  시간: {shiftTimeMap[popover.schedule.shift_code].start} ~{" "}
+                  {shiftTimeMap[popover.schedule.shift_code].end}
                 </div>
               )}
             </div>
