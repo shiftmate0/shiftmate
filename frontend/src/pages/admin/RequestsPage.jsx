@@ -2,17 +2,7 @@ import { useState, useEffect } from 'react'
 import { formatDistanceToNow } from 'date-fns'
 import { ko } from 'date-fns/locale'
 import { RefreshCw, CheckCircle, AlertCircle, ChevronDown } from 'lucide-react'
-import { mockAdminTimeOffRequests, mockAdminSwapRequests } from '../../api/mocks/timeOffRequests'
-
-// ── 실제 API로 교체할 때 ────────────────────────────────────
-// import apiClient from '../../api/client'
-// GET  /admin/requests?status=&type=
-// PATCH /admin/requests/:id/approve  { admin_comment }
-// PATCH /admin/requests/:id/reject   { admin_comment }
-// GET  /swap-requests (팀장 API)
-// PATCH /admin/swap-requests/:id/approve → 409: "처리 중 충돌이 발생했습니다. 다시 시도해 주세요"
-// PATCH /admin/swap-requests/:id/reject  { admin_comment }
-// ──────────────────────────────────────────────────────────
+import apiClient from '../../api/client'
 
 const STATUS_CONFIG = {
   pending:  { label: '대기 중', bg: '#FEF3C7', text: '#D97706' },
@@ -60,30 +50,27 @@ export default function AdminRequestsPage() {
   const [timeOffList, setTimeOffList] = useState([])
   const [swapList, setSwapList]       = useState([])
 
-  // 휴무·휴가 상세 모달
   const [detailItem, setDetailItem]     = useState(null)
   const [adminComment, setAdminComment] = useState('')
 
-  // 교대 승인 확인 모달
   const [swapApproveTarget, setSwapApproveTarget] = useState(null)
 
-  // 교대 반려 모달
   const [swapRejectTarget, setSwapRejectTarget] = useState(null)
   const [swapRejectReason, setSwapRejectReason] = useState('')
 
   const [toast, setToast] = useState(null)
 
-  const fetchAll = () => {
-    // ── 실제 API 교체 시 ──────────────────────────────────
-    // const [toRes, swapRes] = await Promise.all([
-    //   apiClient.get('/admin/requests'),
-    //   apiClient.get('/swap-requests'),
-    // ])
-    // setTimeOffList(toRes.data)
-    // setSwapList(swapRes.data)
-    // ─────────────────────────────────────────────────────
-    setTimeOffList([...mockAdminTimeOffRequests])
-    setSwapList([...mockAdminSwapRequests])
+  const fetchAll = async () => {
+    try {
+      const [toRes, swapRes] = await Promise.all([
+        apiClient.get('/admin/requests'),
+        apiClient.get('/swap-requests'),
+      ])
+      setTimeOffList(toRes.data)
+      setSwapList(swapRes.data)
+    } catch {
+      showToast('목록을 불러오지 못했습니다', false)
+    }
   }
 
   useEffect(() => { fetchAll() }, [])
@@ -93,7 +80,6 @@ export default function AdminRequestsPage() {
     setTimeout(() => setToast(null), 3000)
   }
 
-  // ── 필터링 ─────────────────────────────────────────────
   const filteredTimeOff = timeOffList.filter((r) => {
     const matchStatus = activeStatus === '' || r.status === activeStatus
     const matchType   = typeFilter === '' || typeFilter === 'SWAP'
@@ -119,40 +105,38 @@ export default function AdminRequestsPage() {
     '':       timeOffList.length + swapList.length,
   }
 
-  // ── 휴무·휴가 승인 ─────────────────────────────────────
   const handleApprove = async (item) => {
-    // ── 실제 API 교체 시: await apiClient.patch(`/admin/requests/${item.request_id}/approve`, { admin_comment: adminComment || null })
-    setTimeOffList((prev) =>
-      prev.map((r) =>
-        r.request_id === item.request_id
-          ? { ...r, status: 'approved', admin_comment: adminComment || null, processed_at: new Date().toISOString() }
-          : r
-      )
-    )
-    setDetailItem(null)
-    setAdminComment('')
-    showToast(item.type === 'VAC'
-      ? '휴가 신청이 승인되었습니다 (근무표에 VAC가 자동 배정되었습니다)'
-      : '휴무 신청이 승인되었습니다')
+    try {
+      await apiClient.patch(`/admin/requests/${item.request_id}/approve`, {
+        admin_comment: adminComment || null,
+      })
+      setDetailItem(null)
+      setAdminComment('')
+      showToast(item.type === 'VAC'
+        ? '휴가 신청이 승인되었습니다 (근무표에 VAC가 자동 배정되었습니다)'
+        : '휴무 신청이 승인되었습니다')
+      fetchAll()
+    } catch (err) {
+      showToast(err.response?.data?.detail ?? '승인에 실패했습니다', false)
+    }
   }
 
-  // ── 휴무·휴가 반려 ─────────────────────────────────────
   const handleReject = async (item) => {
     if (!adminComment.trim()) {
       showToast('반려 사유를 입력해주세요', false)
       return
     }
-    // ── 실제 API 교체 시: await apiClient.patch(`/admin/requests/${item.request_id}/reject`, { admin_comment: adminComment })
-    setTimeOffList((prev) =>
-      prev.map((r) =>
-        r.request_id === item.request_id
-          ? { ...r, status: 'rejected', admin_comment: adminComment, processed_at: new Date().toISOString() }
-          : r
-      )
-    )
-    setDetailItem(null)
-    setAdminComment('')
-    showToast('신청이 반려되었습니다')
+    try {
+      await apiClient.patch(`/admin/requests/${item.request_id}/reject`, {
+        admin_comment: adminComment,
+      })
+      setDetailItem(null)
+      setAdminComment('')
+      showToast('신청이 반려되었습니다')
+      fetchAll()
+    } catch (err) {
+      showToast(err.response?.data?.detail ?? '반려에 실패했습니다', false)
+    }
   }
 
   const openDetail = (item) => {
@@ -160,48 +144,40 @@ export default function AdminRequestsPage() {
     setAdminComment('')
   }
 
-  // ── 교대 최종 승인 ─────────────────────────────────────
   const confirmSwapApprove = async () => {
     const req = swapApproveTarget
     try {
-      // ── 실제 API 교체 시: await apiClient.patch(`/admin/swap-requests/${req.swap_request_id}/approve`)
-      setSwapList((prev) =>
-        prev.map((r) =>
-          r.swap_request_id === req.swap_request_id
-            ? { ...r, status: 'approved' }
-            : r
-        )
-      )
+      await apiClient.patch(`/admin/swap-requests/${req.swap_request_id}/approve`)
       setSwapApproveTarget(null)
       showToast('교대 신청이 최종 승인되었습니다')
+      fetchAll()
     } catch (err) {
       if (err?.response?.status === 409) {
         showToast('처리 중 충돌이 발생했습니다. 다시 시도해 주세요', false)
       } else {
-        showToast('오류가 발생했습니다', false)
+        showToast(err.response?.data?.detail ?? '오류가 발생했습니다', false)
       }
       setSwapApproveTarget(null)
     }
   }
 
-  // ── 교대 반려 ──────────────────────────────────────────
   const confirmSwapReject = async () => {
     if (!swapRejectReason.trim()) {
       showToast('반려 사유를 입력해주세요', false)
       return
     }
     const req = swapRejectTarget
-    // ── 실제 API 교체 시: await apiClient.patch(`/admin/swap-requests/${req.swap_request_id}/reject`, { admin_comment: swapRejectReason })
-    setSwapList((prev) =>
-      prev.map((r) =>
-        r.swap_request_id === req.swap_request_id
-          ? { ...r, status: 'rejected' }
-          : r
-      )
-    )
-    setSwapRejectTarget(null)
-    setSwapRejectReason('')
-    showToast('교대 신청이 반려되었습니다')
+    try {
+      await apiClient.patch(`/admin/swap-requests/${req.swap_request_id}/reject`, {
+        admin_comment: swapRejectReason,
+      })
+      setSwapRejectTarget(null)
+      setSwapRejectReason('')
+      showToast('교대 신청이 반려되었습니다')
+      fetchAll()
+    } catch (err) {
+      showToast(err.response?.data?.detail ?? '반려에 실패했습니다', false)
+    }
   }
 
   const showOnlySwap = typeFilter === 'SWAP'
@@ -215,7 +191,6 @@ export default function AdminRequestsPage() {
   return (
     <div className="space-y-6">
 
-      {/* ── Toast ─────────────────────────────────────────────── */}
       {toast && (
         <div
           className="fixed top-5 right-5 z-50 flex items-center gap-2 px-4 py-3 rounded-xl shadow-lg text-sm font-medium"
@@ -230,7 +205,6 @@ export default function AdminRequestsPage() {
         </div>
       )}
 
-      {/* ── 교대 최종 승인 확인 모달 ──────────────────────────── */}
       {swapApproveTarget && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30">
           <div className="bg-white rounded-2xl p-6 w-[400px] shadow-xl">
@@ -263,7 +237,6 @@ export default function AdminRequestsPage() {
         </div>
       )}
 
-      {/* ── 교대 반려 모달 ────────────────────────────────────── */}
       {swapRejectTarget && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30">
           <div className="bg-white rounded-2xl p-6 w-[400px] shadow-xl">
@@ -301,7 +274,6 @@ export default function AdminRequestsPage() {
         </div>
       )}
 
-      {/* ── 요청 상세 모달 ──────────────────────────────────── */}
       {detailItem && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30">
           <div className="bg-white rounded-2xl p-6 w-[480px] shadow-xl">
@@ -403,7 +375,6 @@ export default function AdminRequestsPage() {
         </div>
       )}
 
-      {/* ── 페이지 타이틀 ─────────────────────────────────────── */}
       <div>
         <h1 className="font-bold text-slate-800" style={{ fontSize: 24 }}>요청 관리</h1>
         <p className="text-slate-500 text-sm mt-0.5">
@@ -411,7 +382,6 @@ export default function AdminRequestsPage() {
         </p>
       </div>
 
-      {/* ── 상태 탭 ────────────────────────────────────────────── */}
       <div className="flex gap-0 border-b border-slate-200">
         {STATUS_TABS.map((tab) => {
           const count = tabCounts[tab.key] ?? 0
@@ -440,7 +410,6 @@ export default function AdminRequestsPage() {
         })}
       </div>
 
-      {/* ── 유형 필터 ─────────────────────────────────────────── */}
       <div className="flex items-center gap-3">
         <div className="relative">
           <button
@@ -471,7 +440,6 @@ export default function AdminRequestsPage() {
         <span className="text-xs text-slate-400">{totalCount}건</span>
       </div>
 
-      {/* ── 요청 목록 ─────────────────────────────────────────── */}
       <div
         className="bg-white rounded-2xl border border-slate-200 overflow-hidden"
         style={{ boxShadow: '0 4px 20px rgba(0,0,0,0.06)' }}
@@ -486,7 +454,6 @@ export default function AdminRequestsPage() {
           </thead>
           <tbody>
 
-            {/* 휴무·휴가 행 */}
             {!showOnlySwap && filteredTimeOff.map((req) => {
               const tc = TYPE_CONFIG[req.type] ?? TYPE_CONFIG.OFF
               const sc = STATUS_CONFIG[req.status] ?? STATUS_CONFIG.pending
@@ -544,7 +511,6 @@ export default function AdminRequestsPage() {
               )
             })}
 
-            {/* 교대 요청 행 */}
             {(typeFilter === '' || typeFilter === 'SWAP') && filteredSwap.map((req) => {
               const sc = STATUS_CONFIG[req.status] ?? STATUS_CONFIG.pending
               const elapsed = req.created_at
@@ -623,7 +589,6 @@ export default function AdminRequestsPage() {
               )
             })}
 
-            {/* 빈 상태 */}
             {filteredTimeOff.length === 0 && filteredSwap.length === 0 && (
               <tr>
                 <td colSpan={7} className="text-center py-12 text-sm text-slate-400">

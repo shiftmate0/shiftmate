@@ -2,14 +2,7 @@ import { useState, useEffect } from 'react'
 import { formatDistanceToNow } from 'date-fns'
 import { ko } from 'date-fns/locale'
 import { FileText, Calendar, CheckCircle, Clock, XCircle, X, AlertCircle } from 'lucide-react'
-import { mockTimeOffRequests } from '../../api/mocks/timeOffRequests'
-
-// ── 실제 API로 교체할 때 ────────────────────────────────────
-// import apiClient from '../../api/client'
-// POST:  await apiClient.post('/requests', { type, start_date, end_date, reason })
-// GET:   await apiClient.get('/requests/me', { params: { status } })
-// PATCH: await apiClient.patch(`/requests/${id}/cancel`)
-// ──────────────────────────────────────────────────────────
+import apiClient from '../../api/client'
 
 const TODAY = new Date().toISOString().slice(0, 10)
 
@@ -32,7 +25,6 @@ const TABS = [
   { key: 'rejected', label: '반려됨' },
 ]
 
-// M/D 형식으로 변환 (예: "2026-05-10" → "5/10")
 function formatMD(dateStr) {
   const [, m, d] = dateStr.split('-')
   return `${parseInt(m)}/${parseInt(d)}`
@@ -48,7 +40,6 @@ export default function RequestsPage() {
   const [loading, setLoading]         = useState(true)
   const [activeTab, setActiveTab]     = useState('')
 
-  // 신청 폼
   const [type, setType]           = useState('OFF')
   const [startDate, setStartDate] = useState(TODAY)
   const [endDate, setEndDate]     = useState(TODAY)
@@ -56,29 +47,18 @@ export default function RequestsPage() {
   const [dateError, setDateError] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
-  // Toast
-  const [toast, setToast] = useState(null) // { msg, ok }
+  const [toast, setToast] = useState(null)
+  const [cancelTarget, setCancelTarget] = useState(null)
 
-  // 취소 모달
-  const [cancelTarget, setCancelTarget] = useState(null) // request 객체
-
-  // ── 목록 불러오기 ────────────────────────────────────────
   const fetchRequests = async (status = '') => {
     setLoading(true)
     try {
-      // ── 실제 API 교체 시 ──────────────────────────────
-      // const { data } = await apiClient.get('/requests/me', {
-      //   params: status ? { status } : {}
-      // })
-      // setAllRequests(data)
-      // ─────────────────────────────────────────────────
-
-      // Mock: status 파라미터로 인-메모리 필터
-      const filtered = status
-        ? mockTimeOffRequests.filter((r) => r.status === status)
-        : [...mockTimeOffRequests]
-
-      setAllRequests(filtered.sort((a, b) => new Date(b.created_at) - new Date(a.created_at)))
+      const { data } = await apiClient.get('/requests/me', {
+        params: status ? { status } : {},
+      })
+      setAllRequests(data.sort((a, b) => new Date(b.created_at) - new Date(a.created_at)))
+    } catch {
+      showToast('목록을 불러오지 못했습니다', false)
     } finally {
       setLoading(false)
     }
@@ -88,13 +68,11 @@ export default function RequestsPage() {
     fetchRequests(activeTab)
   }, [activeTab])
 
-  // ── Toast 헬퍼 ──────────────────────────────────────────
   const showToast = (msg, ok = true) => {
     setToast({ msg, ok })
     setTimeout(() => setToast(null), 3000)
   }
 
-  // ── 신청하기 ────────────────────────────────────────────
   const handleSubmit = async () => {
     setDateError('')
     if (endDate < startDate) {
@@ -104,65 +82,36 @@ export default function RequestsPage() {
 
     setSubmitting(true)
     try {
-      // ── 실제 API 교체 시 ──────────────────────────────
-      // try {
-      //   await apiClient.post('/requests', {
-      //     type, start_date: startDate,
-      //     end_date: endDate, reason,
-      //   })
-      //   showToast('신청이 접수되었습니다')
-      //   setType('OFF'); setStartDate(TODAY); setEndDate(TODAY); setReason('')
-      //   fetchRequests(activeTab)
-      // } catch (err) {
-      //   if (err.response?.status === 400) {
-      //     showToast('해당 기간에 이미 신청이 있습니다', false)
-      //   }
-      // }
-      // ─────────────────────────────────────────────────
-
-      const newItem = {
-        request_id:    Date.now(),
+      await apiClient.post('/requests', {
         type,
-        start_date:    startDate,
-        end_date:      endDate,
+        start_date: startDate,
+        end_date: endDate,
         reason,
-        status:        'pending',
-        admin_comment: null,
-        created_at:    new Date().toISOString(),
-        processed_at:  null,
-      }
-
-      // 전체 mock 리스트에 추가 (탭 전환 시에도 유지)
-      mockTimeOffRequests.unshift(newItem)
-
+      })
       showToast('신청이 접수되었습니다')
       setType('OFF')
       setStartDate(TODAY)
       setEndDate(TODAY)
       setReason('')
       fetchRequests(activeTab)
+    } catch (err) {
+      if (err.response?.status === 400) {
+        showToast(err.response.data?.detail ?? '해당 기간에 이미 신청이 있습니다', false)
+      } else {
+        showToast('신청에 실패했습니다', false)
+      }
     } finally {
       setSubmitting(false)
     }
   }
 
-  // ── 취소 모달 열기 / 닫기 ──────────────────────────────
   const openCancelModal  = (req) => setCancelTarget(req)
   const closeCancelModal = ()    => setCancelTarget(null)
 
-  // ── 취소 확정 ───────────────────────────────────────────
   const confirmCancel = async () => {
     if (!cancelTarget) return
     try {
-      // ── 실제 API 교체 시 ──────────────────────────────
-      // await apiClient.patch(`/requests/${cancelTarget.request_id}/cancel`)
-      // ─────────────────────────────────────────────────
-
-      const idx = mockTimeOffRequests.findIndex(
-        (r) => r.request_id === cancelTarget.request_id
-      )
-      if (idx !== -1) mockTimeOffRequests[idx].status = 'canceled'
-
+      await apiClient.patch(`/requests/${cancelTarget.request_id}/cancel`)
       closeCancelModal()
       showToast('신청이 취소되었습니다')
       fetchRequests(activeTab)
@@ -171,13 +120,11 @@ export default function RequestsPage() {
     }
   }
 
-  // ── 렌더링할 목록 ────────────────────────────────────────
   const displayed = allRequests
 
   return (
     <div className="space-y-6">
 
-      {/* ── Toast ─────────────────────────────────────────────── */}
       {toast && (
         <div
           className="fixed top-5 right-5 z-50 flex items-center gap-2 px-4 py-3 rounded-xl shadow-lg text-sm font-medium"
@@ -192,7 +139,6 @@ export default function RequestsPage() {
         </div>
       )}
 
-      {/* ── 취소 확인 모달 ────────────────────────────────────── */}
       {cancelTarget && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30">
           <div
@@ -225,7 +171,6 @@ export default function RequestsPage() {
         </div>
       )}
 
-      {/* ── 페이지 타이틀 ─────────────────────────────────────── */}
       <div>
         <h1 className="font-bold text-slate-800" style={{ fontSize: 24 }}>
           휴무·휴가 신청
@@ -235,10 +180,8 @@ export default function RequestsPage() {
         </p>
       </div>
 
-      {/* ── 메인 레이아웃 ────────────────────────────────────── */}
       <div className="grid gap-6" style={{ gridTemplateColumns: '1fr 1.2fr' }}>
 
-        {/* ── 신청 폼 ──────────────────────────────────────────── */}
         <div
           className="bg-white rounded-2xl p-6 border border-slate-200"
           style={{ boxShadow: '0 4px 20px rgba(0,0,0,0.06)' }}
@@ -250,7 +193,6 @@ export default function RequestsPage() {
             </h2>
           </div>
 
-          {/* 신청 유형 */}
           <div className="mb-5">
             <label className="block text-sm font-medium text-slate-700 mb-2">신청 유형</label>
             <div className="grid grid-cols-2 gap-2">
@@ -277,7 +219,6 @@ export default function RequestsPage() {
             </div>
           </div>
 
-          {/* 시작일 */}
           <div className="mb-4">
             <label className="block text-sm font-medium text-slate-700 mb-1.5">
               시작일 <span className="text-red-500">*</span>
@@ -294,7 +235,6 @@ export default function RequestsPage() {
             />
           </div>
 
-          {/* 종료일 */}
           <div className="mb-4">
             <label className="block text-sm font-medium text-slate-700 mb-1.5">
               종료일 <span className="text-slate-400 text-xs">(생략 시 시작일과 동일)</span>
@@ -314,7 +254,6 @@ export default function RequestsPage() {
             )}
           </div>
 
-          {/* 사유 */}
           <div className="mb-5">
             <label className="block text-sm font-medium text-slate-700 mb-1.5">
               신청 사유 (선택)
@@ -329,7 +268,6 @@ export default function RequestsPage() {
             />
           </div>
 
-          {/* 신청하기 버튼 */}
           <button
             onClick={handleSubmit}
             disabled={!startDate || submitting}
@@ -343,7 +281,6 @@ export default function RequestsPage() {
             {submitting ? '신청 중...' : '신청하기'}
           </button>
 
-          {/* 안내 */}
           <div
             className="mt-5 p-4 rounded-xl text-xs space-y-1.5"
             style={{ background: '#EFF6FF' }}
@@ -362,13 +299,11 @@ export default function RequestsPage() {
           </div>
         </div>
 
-        {/* ── 내역 목록 ────────────────────────────────────────── */}
         <div>
           <div className="flex items-center justify-between mb-3">
             <h2 className="font-semibold text-slate-800" style={{ fontSize: 16 }}>신청 내역</h2>
           </div>
 
-          {/* 탭 */}
           <div className="flex gap-1 mb-4 bg-slate-100 p-1 rounded-xl">
             {TABS.map((tab) => (
               <button
@@ -386,7 +321,6 @@ export default function RequestsPage() {
             ))}
           </div>
 
-          {/* 목록 */}
           {loading ? (
             <div className="text-center py-12 text-slate-400 text-sm">불러오는 중...</div>
           ) : displayed.length === 0 ? (
@@ -412,7 +346,6 @@ export default function RequestsPage() {
                     className="bg-white rounded-2xl p-5 border border-slate-200"
                     style={{ boxShadow: '0 2px 12px rgba(0,0,0,0.04)' }}
                   >
-                    {/* 상단: 유형 + 상태 + 취소 */}
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-2">
                         <span
@@ -440,15 +373,12 @@ export default function RequestsPage() {
                       )}
                     </div>
 
-                    {/* 날짜 */}
                     <p className="text-sm font-medium text-slate-800 mb-0.5">{dateStr}</p>
 
-                    {/* 사유 */}
                     {req.reason && (
                       <p className="text-xs text-slate-500 mb-1">{req.reason}</p>
                     )}
 
-                    {/* 반려 사유 — rejected + admin_comment 있을 때만 */}
                     {req.status === 'rejected' && req.admin_comment && (
                       <div
                         className="mt-2 px-3 py-2 rounded-lg text-xs"
@@ -458,7 +388,6 @@ export default function RequestsPage() {
                       </div>
                     )}
 
-                    {/* 경과 시간 */}
                     <p className="text-xs text-slate-400 mt-2">{elapsed}</p>
                   </div>
                 )
