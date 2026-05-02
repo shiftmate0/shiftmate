@@ -8,7 +8,7 @@ import Button from '../../components/Button'
 import { useToast } from '../../components/Toast'
 
 // ── 검증 API 준비 플래그 — Day 3 AM 이후 true로 변경 ──────────────
-const VALIDATE_API_READY = false
+const VALIDATE_API_READY = true
 
 const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토']
 
@@ -28,8 +28,8 @@ const PERSON_WARNING_TYPES = new Set(['consecutive_night', 'night_to_day', 'work
 
 function formatWarning(w) {
   return PERSON_WARNING_TYPES.has(w.type)
-    ? `${w.name}: ${w.message}`
-    : `${w.date}: ${w.message}`
+    ? `${w.affected_user_name}: ${w.message}`
+    : `${w.affected_date}: ${w.message}`
 }
 
 export default function SchedulePage() {

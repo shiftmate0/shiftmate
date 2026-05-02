@@ -69,6 +69,7 @@ def get_schedules(
         ScheduleItem(
             schedule_id=s.schedule_id,
             user_id=s.user_id,
+            user_name=s.user.name,
             work_date=s.work_date,
             shift_type_id=s.shift_type_id,
             shift_code=s.shift_type.code,
@@ -115,6 +116,7 @@ def get_my_schedules(
         ScheduleItem(
             schedule_id=s.schedule_id,
             user_id=s.user_id,
+            user_name=s.user.name,
             work_date=s.work_date,
             shift_type_id=s.shift_type_id,
             shift_code=s.shift_type.code,
@@ -259,7 +261,13 @@ def validate_schedules(
     db: Session = Depends(get_db),
 ):
     result = validate_schedule(db, year, month)
-    return ValidateResponse(year=year, month=month, **result)
+    return ValidateResponse(
+        year=year,
+        month=month,
+        is_valid=result["is_valid"],
+        has_warnings=len(result["warnings"]) > 0,
+        warnings=result["warnings"],
+    )
 
 
 # ════════════════════════════════════════════════════════

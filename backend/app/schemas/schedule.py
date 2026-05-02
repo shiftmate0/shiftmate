@@ -7,6 +7,7 @@ from datetime import date, datetime
 class ScheduleItem(BaseModel):
     schedule_id: int
     user_id: int
+    user_name: str
     work_date: date
     shift_type_id: int
     shift_code: str
@@ -72,6 +73,7 @@ class ValidateResponse(BaseModel):
     year: int
     month: int
     is_valid: bool
+    has_warnings: bool
     warnings: List[ValidationWarning]
 
 
