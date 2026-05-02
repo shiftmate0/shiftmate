@@ -7,8 +7,8 @@ from app.core.database import get_db
 from app.dependencies.auth import get_current_user, require_admin
 from app.models.time_off_request import TimeOffRequest
 from app.models.shift_type import ShiftType
-from app.models.schedule import Schedule
 from app.models.user import User
+from app.services.schedule_service import upsert_schedule
 from app.schemas.time_off_request import (
     TimeOffRequestCreate,
     TimeOffCreateResponse,
@@ -124,7 +124,7 @@ def cancel_request(
 
     request.status = "canceled"
     request.canceled_by = current_user.user_id
-    request.processed_at = datetime.utcnow()
+    request.processed_at = datetime.now()
 
     db.commit()
     db.refresh(request)
@@ -205,9 +205,6 @@ def approve_request(
         raise HTTPException(status_code=400, detail="이미 처리된 요청입니다")
 
     # ── VAC 승인 시: schedules 테이블에 VAC 코드 자동 배정 ─────
-    # TODO: schedule_service.py 공유 완료 후
-    #       from app.services.schedule_service import upsert_schedule
-    #       으로 교체 (현재는 동일 로직 인라인)
     if request.type == "VAC":
         vac_shift = db.query(ShiftType).filter(ShiftType.code == "VAC").first()
 
@@ -216,26 +213,12 @@ def approve_request(
 
         current_date = request.start_date
         while current_date <= request.end_date:
-            existing = db.query(Schedule).filter(
-                Schedule.user_id == request.requester_id,
-                Schedule.work_date == current_date,
-            ).first()
-
-            if existing:
-                existing.shift_type_id = vac_shift.shift_type_id
-                existing.updated_at = datetime.utcnow()
-            else:
-                db.add(Schedule(
-                    user_id=request.requester_id,
-                    work_date=current_date,
-                    shift_type_id=vac_shift.shift_type_id,
-                ))
-
+            upsert_schedule(db, request.requester_id, current_date, vac_shift.shift_type_id)
             current_date += timedelta(days=1)
 
     request.status = "approved"
     request.admin_comment = body.admin_comment
-    request.processed_at = datetime.utcnow()
+    request.processed_at = datetime.now()
 
     db.commit()
     db.refresh(request)
@@ -266,7 +249,7 @@ def reject_request(
 
     request.status = "rejected"
     request.admin_comment = body.admin_comment
-    request.processed_at = datetime.utcnow()
+    request.processed_at = datetime.now()
 
     db.commit()
     db.refresh(request)
