@@ -5,6 +5,7 @@ from typing import Optional, List
 
 from app.core.database import get_db
 from app.dependencies.auth import get_current_user, require_admin
+from app.models.schedule import Schedule
 from app.models.time_off_request import TimeOffRequest
 from app.models.shift_type import ShiftType
 from app.models.user import User
@@ -210,6 +211,22 @@ def approve_request(
 
         if not vac_shift:
             raise HTTPException(status_code=500, detail="VAC 근무 유형을 찾을 수 없습니다")
+
+        # is_locked=True 인 스케줄과 충돌 여부 검사
+        locked_conflict = db.query(Schedule).filter(
+            Schedule.user_id == request.requester_id,
+            Schedule.work_date >= request.start_date,
+            Schedule.work_date <= request.end_date,
+            Schedule.is_locked == True,
+        ).first()
+        if locked_conflict:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"{locked_conflict.work_date} 날짜에 교대 협의 중인 시프트가 있어 "
+                    "휴가 승인이 불가합니다"
+                ),
+            )
 
         current_date = request.start_date
         while current_date <= request.end_date:

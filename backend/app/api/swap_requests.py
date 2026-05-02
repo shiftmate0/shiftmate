@@ -65,11 +65,19 @@ def create_swap_request(
     if duplicate:
         raise HTTPException(status_code=400, detail="이미 대기 중인 교대 요청이 있습니다")
 
-    if schedule.is_locked:
-        raise HTTPException(status_code=400, detail="교대 협의 중인 시프트는 요청할 수 없습니다")
-
     if body.required_years_min > body.required_years_max:
         raise HTTPException(status_code=400, detail="연차 최솟값은 최댓값보다 클 수 없습니다")
+
+    # 원자적 CAS: is_locked=False 인 경우에만 True 로 갱신
+    lock_result = db.execute(
+        sql_update(Schedule)
+        .where(Schedule.schedule_id == body.requester_schedule_id)
+        .where(Schedule.is_locked == False)
+        .values(is_locked=True)
+        .execution_options(synchronize_session=False)
+    )
+    if lock_result.rowcount == 0:
+        raise HTTPException(status_code=409, detail="교대 협의 중인 시프트는 요청할 수 없습니다")
 
     hours = max(1, min(72, body.expires_hours))
     swap_req = SwapRequest(
@@ -82,7 +90,6 @@ def create_swap_request(
         expires_at=datetime.now() + timedelta(hours=hours),
     )
     db.add(swap_req)
-    schedule.is_locked = True
     db.commit()
     db.refresh(swap_req)
 
@@ -351,11 +358,7 @@ def create_proposal(
     if prop_schedule.work_date <= date.today():
         raise HTTPException(status_code=400, detail="오늘 이후 날짜의 시프트만 제안할 수 있습니다")
 
-    # 9. 잠금 확인
-    if prop_schedule.is_locked:
-        raise HTTPException(status_code=400, detail="교대 협의 중인 시프트는 제안할 수 없습니다")
-
-    # 10. 중복 제안 확인
+    # 9. 중복 제안 확인
     duplicate = db.query(SwapProposal).filter(
         SwapProposal.swap_request_id == swap_request_id,
         SwapProposal.proposer_id == current_user.user_id,
@@ -363,7 +366,7 @@ def create_proposal(
     if duplicate:
         raise HTTPException(status_code=400, detail="이미 이 요청에 제안하셨습니다")
 
-    # 11. 연차 검증
+    # 10. 연차 검증
     years = current_user.years_of_experience
     if not (swap_req.required_years_min <= years <= swap_req.required_years_max):
         raise HTTPException(
@@ -375,6 +378,17 @@ def create_proposal(
             ),
         )
 
+    # 11. 원자적 CAS: proposer 시프트 잠금
+    lock_result = db.execute(
+        sql_update(Schedule)
+        .where(Schedule.schedule_id == body.proposer_schedule_id)
+        .where(Schedule.is_locked == False)
+        .values(is_locked=True)
+        .execution_options(synchronize_session=False)
+    )
+    if lock_result.rowcount == 0:
+        raise HTTPException(status_code=409, detail="교대 협의 중인 시프트는 제안할 수 없습니다")
+
     proposal = SwapProposal(
         swap_request_id=swap_request_id,
         proposer_id=current_user.user_id,
@@ -383,7 +397,6 @@ def create_proposal(
         status="proposed",
     )
     db.add(proposal)
-    prop_schedule.is_locked = True
     db.commit()
     db.refresh(proposal)
 
@@ -507,29 +520,38 @@ def approve_swap_request(
         key=lambda x: x[0].schedule_id,
     )
 
-    for sched, new_type_id in pairs:
-        result = db.execute(
-            sql_update(Schedule)
-            .where(Schedule.schedule_id == sched.schedule_id)
-            .where(Schedule.version == sched.version)
-            .values(
-                shift_type_id=new_type_id,
-                is_locked=False,
-                version=sched.version + 1,
-                updated_at=datetime.now(),
-            )
-        )
-        if result.rowcount == 0:
-            db.rollback()
-            raise HTTPException(
-                status_code=409,
-                detail="동시성 충돌이 발생했습니다. 다시 시도해 주세요",
-            )
-
     now = datetime.now()
-    swap_req.status = "approved"
-    swap_req.updated_at = now
-    db.commit()
+
+    # 두 근무표 교환 + 요청 상태 변경을 단일 트랜잭션으로 처리
+    try:
+        for sched, new_type_id in pairs:
+            result = db.execute(
+                sql_update(Schedule)
+                .where(Schedule.schedule_id == sched.schedule_id)
+                .where(Schedule.version == sched.version)
+                .values(
+                    shift_type_id=new_type_id,
+                    is_locked=False,
+                    version=sched.version + 1,
+                    updated_at=now,
+                )
+                .execution_options(synchronize_session=False)
+            )
+            if result.rowcount == 0:
+                raise HTTPException(
+                    status_code=409,
+                    detail="동시성 충돌이 발생했습니다. 다시 시도해 주세요",
+                )
+
+        swap_req.status = "approved"
+        swap_req.updated_at = now
+        db.commit()
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="교대 승인 처리 중 오류가 발생했습니다")
 
     return {
         "swap_request_id": swap_req.swap_request_id,
