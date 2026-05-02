@@ -9,25 +9,10 @@ import {
   Save,
   CheckCircle,
   AlertTriangle,
-  Info,
   Lock,
 } from "lucide-react";
-import {
-  activeEmployees,
-  aprilSchedules,
-  marchSchedules,
-  shiftTypes,
-  shiftColorMap,
-  shiftBgMap,
-  scheduleValidations,
-} from "../../data/mockData.js";
 
-const DAYS_IN_MONTH = 30;
-const DAYS_IN_PREV = 31;
 const DAYS_OF_WEEK = ["일", "월", "화", "수", "목", "금", "토"];
-
-const APRIL_START_DOW = 3;
-const MARCH_START_DOW = 0;
 
 moment.locale("ko");
 const localizer = momentLocalizer(moment);
@@ -41,6 +26,27 @@ function isWeekend(dow) {
   return dow === 0 || dow === 6;
 }
 
+function buildScheduleMap(scheduleList) {
+  const map = {};
+  scheduleList.forEach((s) => {
+    const day = new Date(s.work_date + "T00:00:00").getDate();
+    if (!map[s.user_id]) map[s.user_id] = {};
+    map[s.user_id][day] = s.shift_code;
+  });
+  return map;
+}
+
+function buildLockMap(scheduleList) {
+  const map = {};
+  scheduleList.forEach((s) => {
+    if (!s.is_locked) return;
+    const day = new Date(s.work_date + "T00:00:00").getDate();
+    if (!map[s.user_id]) map[s.user_id] = {};
+    map[s.user_id][day] = true;
+  });
+  return map;
+}
+
 function ShiftCell({
   code,
   onChange,
@@ -49,6 +55,9 @@ function ShiftCell({
   hasWarning = false,
   isLocked = false,
   disabled = false,
+  shiftTypes = [],
+  shiftColorMap = {},
+  shiftBgMap = {},
 }) {
   const [hover, setHover] = useState(false);
 
@@ -107,7 +116,7 @@ function ShiftCell({
       >
         <option value="">-</option>
         {shiftTypes.map((st) => (
-          <option key={st.id} value={st.code}>
+          <option key={st.shift_type_id} value={st.code}>
             {st.code}
           </option>
         ))}
@@ -126,64 +135,158 @@ function ShiftCell({
 export default function SchedulesPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const view = searchParams.get("view") || "grid";
-  const urlYear = parseInt(searchParams.get("year")) || new Date().getFullYear();
+  const urlYear  = parseInt(searchParams.get("year"))  || new Date().getFullYear();
   const urlMonth = parseInt(searchParams.get("month")) || new Date().getMonth() + 1;
 
-  const [schedules, setSchedules] = useState(() =>
-    JSON.parse(JSON.stringify(aprilSchedules))
-  );
-  const [prevSchedules] = useState(() =>
-    JSON.parse(JSON.stringify(marchSchedules))
-  );
+  const prevMonth = urlMonth === 1 ? 12 : urlMonth - 1;
+  const prevYear  = urlMonth === 1 ? urlYear - 1 : urlYear;
+  const daysInMonth     = new Date(urlYear, urlMonth, 0).getDate();
+  const daysInPrevMonth = new Date(prevYear, prevMonth, 0).getDate();
+  const monthStartDow     = new Date(urlYear, urlMonth - 1, 1).getDay();
+  const prevMonthStartDow = new Date(prevYear, prevMonth - 1, 1).getDay();
+
+  const [employees,    setEmployees]    = useState([]);
+  const [shiftTypeList, setShiftTypeList] = useState([]);
+  const [schedules,    setSchedules]    = useState({});
+  const [prevSchedules, setPrevSchedules] = useState({});
+  const [lockedCells,  setLockedCells]  = useState({});
+  const [periodStatus, setPeriodStatus] = useState("draft");
+  const [validations,  setValidations]  = useState([]);
 
   const [showValidation, setShowValidation] = useState(true);
-  const [confirmModal, setConfirmModal] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const [confirmed, setConfirmed] = useState(false);
-  const [activePanel, setActivePanel] = useState("both");
+  const [confirmModal,   setConfirmModal]   = useState(false);
+  const [saved,          setSaved]          = useState(false);
+  const [activePanel,    setActivePanel]    = useState("both");
+  const [saving,         setSaving]         = useState(false);
+  const [confirming,     setConfirming]     = useState(false);
+
+  const confirmed = periodStatus === "confirmed";
+
+  const shiftColorMap = useMemo(() => {
+    const m = {};
+    shiftTypeList.forEach((st) => { m[st.code] = st.color; });
+    return m;
+  }, [shiftTypeList]);
+
+  const shiftBgMap = useMemo(() => {
+    const m = {};
+    shiftTypeList.forEach((st) => { m[st.code] = st.color + "20"; });
+    return m;
+  }, [shiftTypeList]);
+
+  const codeToTypeId = useMemo(() => {
+    const m = {};
+    shiftTypeList.forEach((st) => { m[st.code] = st.shift_type_id; });
+    return m;
+  }, [shiftTypeList]);
+
+  useEffect(() => {
+    fetchAll();
+  }, [urlYear, urlMonth]);
+
+  async function fetchAll() {
+    try {
+      const [empRes, stRes, schedRes, prevSchedRes] = await Promise.all([
+        apiClient.get("/admin/employees"),
+        apiClient.get("/admin/shift-types"),
+        apiClient.get("/schedules", { params: { year: urlYear, month: urlMonth } }),
+        apiClient.get("/schedules", { params: { year: prevYear, month: prevMonth } }),
+      ]);
+      setEmployees((empRes.data || []).filter((e) => e.is_active));
+      setShiftTypeList(stRes.data || []);
+      setPeriodStatus(schedRes.data.period_status || "draft");
+      setSchedules(buildScheduleMap(schedRes.data.schedules || []));
+      setLockedCells(buildLockMap(schedRes.data.schedules || []));
+      setPrevSchedules(buildScheduleMap(prevSchedRes.data.schedules || []));
+    } catch (err) {
+      console.error("데이터 로드 실패:", err);
+    }
+    fetchValidations();
+  }
+
+  async function fetchValidations() {
+    try {
+      const res = await apiClient.get("/admin/schedules/validate", {
+        params: { year: urlYear, month: urlMonth },
+      });
+      setValidations(res.data.warnings || []);
+    } catch {
+      setValidations([]);
+    }
+  }
 
   const warningDays = useMemo(() => {
-    return new Set(
-      scheduleValidations
-        .filter((v) => v.type === "warning")
-        .map((v) => `${v.employeeId}-${v.day}`)
-    );
-  }, []);
+    const s = new Set();
+    validations.forEach((v) => {
+      if (!v.affected_date) return;
+      const day = new Date(v.affected_date + "T00:00:00").getDate();
+      if (v.affected_user_name) {
+        const emp = employees.find((e) => e.name === v.affected_user_name);
+        if (emp) s.add(`${emp.user_id}-${day}`);
+      } else {
+        employees.forEach((emp) => s.add(`${emp.user_id}-${day}`));
+      }
+    });
+    return s;
+  }, [validations, employees]);
 
-  const validationWarningCount = scheduleValidations.filter(
-    (v) => v.type === "warning"
-  ).length;
-
-  const handleChange = (empId, day, code) => {
+  const handleChange = (userId, day, code) => {
     if (confirmed) return;
-
     setSchedules((prev) => ({
       ...prev,
-      [empId]: {
-        ...(prev[empId] || {}),
-        [day]: code,
-      },
+      [userId]: { ...(prev[userId] || {}), [day]: code },
     }));
-
     setSaved(false);
   };
 
-  const handleSave = () => {
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const items = [];
+      employees.forEach((emp) => {
+        for (let day = 1; day <= daysInMonth; day++) {
+          const code = schedules[emp.user_id]?.[day];
+          if (code) {
+            const stId = codeToTypeId[code];
+            if (stId) {
+              items.push({
+                user_id: emp.user_id,
+                work_date: `${urlYear}-${String(urlMonth).padStart(2, "0")}-${String(day).padStart(2, "0")}`,
+                shift_type_id: stId,
+              });
+            }
+          }
+        }
+      });
+      await apiClient.post("/admin/schedules/bulk", items);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+      fetchValidations();
+    } catch (err) {
+      console.error("저장 실패:", err);
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const handleConfirm = () => {
-    setConfirmed(true);
-    setConfirmModal(false);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+  const handleConfirm = async () => {
+    setConfirming(true);
+    try {
+      await apiClient.post(`/admin/schedules/${urlYear}/${urlMonth}/confirm`);
+      setPeriodStatus("confirmed");
+      setConfirmModal(false);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch (err) {
+      console.error("확정 실패:", err);
+    } finally {
+      setConfirming(false);
+    }
   };
 
   const getDayHeader = (day, startDow) => {
     const dow = getDayOfWeek(startDow, day);
     const weekend = isWeekend(dow);
-
     return (
       <th
         key={day}
@@ -196,19 +299,13 @@ export default function SchedulesPage() {
       >
         <div
           className="text-xs font-semibold"
-          style={{
-            color:
-              dow === 0 ? "#EF4444" : dow === 6 ? "#3B82F6" : "#64748B",
-          }}
+          style={{ color: dow === 0 ? "#EF4444" : dow === 6 ? "#3B82F6" : "#64748B" }}
         >
           {day}
         </div>
         <div
           className="text-xs"
-          style={{
-            color:
-              dow === 0 ? "#FCA5A5" : dow === 6 ? "#93C5FD" : "#CBD5E1",
-          }}
+          style={{ color: dow === 0 ? "#FCA5A5" : dow === 6 ? "#93C5FD" : "#CBD5E1" }}
         >
           {DAYS_OF_WEEK[dow]}
         </div>
@@ -250,17 +347,16 @@ export default function SchedulesPage() {
           캘린더
         </button>
       </div>
+
       <div className="flex items-center justify-between shrink-0">
         <div>
           <h1 className="font-bold text-slate-800" style={{ fontSize: 24 }}>
             근무표 작성
           </h1>
-
           <div className="flex items-center gap-3 mt-1">
             <span className="text-slate-500 text-sm">
-              2026년 4월 · {confirmed ? "확정 완료" : "작성 중"}
+              {urlYear}년 {urlMonth}월 · {confirmed ? "확정 완료" : "작성 중"}
             </span>
-
             <span
               className="px-2.5 py-0.5 rounded-full text-xs font-medium"
               style={
@@ -287,11 +383,7 @@ export default function SchedulesPage() {
                 className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
                 style={
                   activePanel === value
-                    ? {
-                        background: "white",
-                        color: "#3B82F6",
-                        boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
-                      }
+                    ? { background: "white", color: "#3B82F6", boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }
                     : { color: "#64748B" }
                 }
               >
@@ -302,16 +394,16 @@ export default function SchedulesPage() {
 
           <button
             onClick={handleSave}
-            disabled={confirmed}
+            disabled={confirmed || saving}
             className="flex items-center gap-2 px-4 py-2 rounded-[14px] text-sm font-medium border border-slate-200 text-slate-700 hover:bg-slate-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Save size={14} />
-            {saved ? "저장됨" : "저장"}
+            {saving ? "저장 중..." : saved ? "저장됨" : "저장"}
           </button>
 
           <button
             onClick={() => setConfirmModal(true)}
-            disabled={confirmed}
+            disabled={confirmed || confirming}
             className="flex items-center gap-2 px-5 py-2 rounded-[14px] text-white text-sm font-medium transition-all hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
             style={{ background: "#3B82F6" }}
           >
@@ -321,7 +413,7 @@ export default function SchedulesPage() {
         </div>
       </div>
 
-      {showValidation && scheduleValidations.length > 0 && (
+      {showValidation && validations.length > 0 && (
         <div
           className="bg-white rounded-2xl border p-4 space-y-2 shrink-0"
           style={{ borderColor: "#FDE68A", background: "#FFFBEB" }}
@@ -330,7 +422,6 @@ export default function SchedulesPage() {
             <span className="text-sm font-semibold" style={{ color: "#92400E" }}>
               자동 검증 결과
             </span>
-
             <button
               onClick={() => setShowValidation(false)}
               className="text-xs text-amber-500 hover:text-amber-700"
@@ -338,20 +429,13 @@ export default function SchedulesPage() {
               닫기
             </button>
           </div>
-
-          {scheduleValidations.map((v, index) => (
+          {validations.map((v, index) => (
             <div
-              key={`${v.employeeId || "all"}-${v.day || index}-${index}`}
+              key={index}
               className="flex items-start gap-2 text-xs"
-              style={{
-                color: v.type === "warning" ? "#B45309" : "#1D4ED8",
-              }}
+              style={{ color: "#B45309" }}
             >
-              {v.type === "warning" ? (
-                <AlertTriangle size={13} className="mt-0.5 shrink-0" />
-              ) : (
-                <Info size={13} className="mt-0.5 shrink-0" />
-              )}
+              <AlertTriangle size={13} className="mt-0.5 shrink-0" />
               <span>{v.message}</span>
             </div>
           ))}
@@ -370,13 +454,12 @@ export default function SchedulesPage() {
           >
             <div className="px-4 py-3 border-b border-slate-100 shrink-0 flex items-center gap-2">
               <span className="text-sm font-semibold text-slate-700">
-                3월 근무표
+                {prevYear}년 {prevMonth}월 근무표
               </span>
               <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">
                 참고용 · 읽기 전용
               </span>
             </div>
-
             <div className="overflow-auto flex-1">
               <table className="border-collapse" style={{ fontSize: 12 }}>
                 <thead>
@@ -387,15 +470,14 @@ export default function SchedulesPage() {
                     >
                       직원
                     </th>
-                    {Array.from({ length: DAYS_IN_PREV }, (_, i) =>
-                      getDayHeader(i + 1, MARCH_START_DOW)
+                    {Array.from({ length: daysInPrevMonth }, (_, i) =>
+                      getDayHeader(i + 1, prevMonthStartDow)
                     )}
                   </tr>
                 </thead>
-
                 <tbody>
-                  {activeEmployees.map((emp) => (
-                    <tr key={emp.id} className="hover:bg-slate-50/50">
+                  {employees.map((emp) => (
+                    <tr key={emp.user_id} className="hover:bg-slate-50/50">
                       <td
                         className="sticky left-0 z-10 bg-white border-r border-b border-slate-100 px-3 py-0 whitespace-nowrap"
                         style={{ minWidth: 120 }}
@@ -412,16 +494,15 @@ export default function SchedulesPage() {
                           </span>
                         </div>
                       </td>
-
-                      {Array.from({ length: DAYS_IN_PREV }, (_, i) => (
+                      {Array.from({ length: daysInPrevMonth }, (_, i) => (
                         <ShiftCell
                           key={i + 1}
-                          code={prevSchedules[emp.id]?.[i + 1] || ""}
+                          code={prevSchedules[emp.user_id]?.[i + 1] || ""}
                           onChange={() => {}}
-                          isWeekend={isWeekend(
-                            getDayOfWeek(MARCH_START_DOW, i + 1)
-                          )}
+                          isWeekend={isWeekend(getDayOfWeek(prevMonthStartDow, i + 1))}
                           readonly
+                          shiftColorMap={shiftColorMap}
+                          shiftBgMap={shiftBgMap}
                         />
                       ))}
                     </tr>
@@ -439,9 +520,8 @@ export default function SchedulesPage() {
           >
             <div className="px-4 py-3 border-b border-slate-100 shrink-0 flex items-center gap-2">
               <span className="text-sm font-semibold text-slate-700">
-                4월 근무표
+                {urlYear}년 {urlMonth}월 근무표
               </span>
-
               {confirmed && (
                 <span
                   className="text-xs px-2 py-0.5 rounded-full"
@@ -450,20 +530,15 @@ export default function SchedulesPage() {
                   확정됨
                 </span>
               )}
-
               <div className="ml-auto flex items-center gap-4 text-xs text-slate-500">
-                {shiftTypes.map((st) => (
-                  <span key={st.id} className="flex items-center gap-1">
-                    <span
-                      className="w-3 h-3 rounded-sm"
-                      style={{ background: st.color }}
-                    />
+                {shiftTypeList.map((st) => (
+                  <span key={st.shift_type_id} className="flex items-center gap-1">
+                    <span className="w-3 h-3 rounded-sm" style={{ background: st.color }} />
                     {st.code}={st.label}
                   </span>
                 ))}
               </div>
             </div>
-
             <div className="overflow-auto flex-1">
               <table className="border-collapse" style={{ fontSize: 12 }}>
                 <thead className="sticky top-0 z-20">
@@ -474,16 +549,14 @@ export default function SchedulesPage() {
                     >
                       직원 / 날짜
                     </th>
-
-                    {Array.from({ length: DAYS_IN_MONTH }, (_, i) =>
-                      getDayHeader(i + 1, APRIL_START_DOW)
+                    {Array.from({ length: daysInMonth }, (_, i) =>
+                      getDayHeader(i + 1, monthStartDow)
                     )}
                   </tr>
                 </thead>
-
                 <tbody>
-                  {activeEmployees.map((emp) => (
-                    <tr key={emp.id} className="hover:bg-blue-50/20">
+                  {employees.map((emp) => (
+                    <tr key={emp.user_id} className="hover:bg-blue-50/20">
                       <td className="sticky left-0 z-10 bg-white border-r border-b border-slate-100 px-3 py-0 whitespace-nowrap">
                         <div className="flex items-center gap-2.5 py-2">
                           <div
@@ -492,32 +565,31 @@ export default function SchedulesPage() {
                           >
                             {emp.name.charAt(0)}
                           </div>
-
                           <div>
                             <div className="text-xs text-slate-700 font-medium">
                               {emp.name}
                             </div>
                             <div className="text-xs text-slate-400">
-                              {emp.yearsOfExperience}년차
+                              {emp.years_of_experience}년차
                             </div>
                           </div>
                         </div>
                       </td>
-
-                      {Array.from({ length: DAYS_IN_MONTH }, (_, i) => {
+                      {Array.from({ length: daysInMonth }, (_, i) => {
                         const day = i + 1;
-                        const dow = getDayOfWeek(APRIL_START_DOW, day);
-                        const hasWarning = warningDays.has(`${emp.id}-${day}`);
-
+                        const dow = getDayOfWeek(monthStartDow, day);
                         return (
                           <ShiftCell
                             key={day}
-                            code={schedules[emp.id]?.[day] || ""}
-                            onChange={(code) => handleChange(emp.id, day, code)}
+                            code={schedules[emp.user_id]?.[day] || ""}
+                            onChange={(code) => handleChange(emp.user_id, day, code)}
                             isWeekend={isWeekend(dow)}
-                            hasWarning={hasWarning}
-                            isLocked={false}
+                            hasWarning={warningDays.has(`${emp.user_id}-${day}`)}
+                            isLocked={lockedCells[emp.user_id]?.[day] || false}
                             disabled={confirmed}
+                            shiftTypes={shiftTypeList}
+                            shiftColorMap={shiftColorMap}
+                            shiftBgMap={shiftBgMap}
                           />
                         );
                       })}
@@ -539,30 +611,22 @@ export default function SchedulesPage() {
             >
               <CheckCircle size={24} style={{ color: "#3B82F6" }} />
             </div>
-
-            <h2
-              className="font-bold text-slate-800 mb-2"
-              style={{ fontSize: 18 }}
-            >
-              2026년 4월 근무표 확정
+            <h2 className="font-bold text-slate-800 mb-2" style={{ fontSize: 18 }}>
+              {urlYear}년 {urlMonth}월 근무표 확정
             </h2>
-
             <p className="text-sm text-slate-500 mb-4">
               월 단위로 일괄 확정됩니다. 확정 후에는 셀 선택이 잠기며,
               관리자가 별도 수정해야 합니다.
             </p>
-
-            {validationWarningCount > 0 && (
+            {validations.length > 0 && (
               <div
                 className="p-3 rounded-xl mb-4 text-xs"
                 style={{ background: "#FFFBEB", color: "#B45309" }}
               >
                 <AlertTriangle size={13} className="inline mr-1" />
-                검증 경고 {validationWarningCount}건이 있습니다. 그래도
-                확정하시겠습니까?
+                검증 경고 {validations.length}건이 있습니다. 그래도 확정하시겠습니까?
               </div>
             )}
-
             <div className="flex gap-3">
               <button
                 onClick={() => setConfirmModal(false)}
@@ -570,13 +634,13 @@ export default function SchedulesPage() {
               >
                 취소
               </button>
-
               <button
                 onClick={handleConfirm}
-                className="flex-1 py-2.5 rounded-[14px] text-white text-sm font-medium transition-all"
+                disabled={confirming}
+                className="flex-1 py-2.5 rounded-[14px] text-white text-sm font-medium transition-all disabled:opacity-50"
                 style={{ background: "#3B82F6" }}
               >
-                확정하기
+                {confirming ? "처리 중..." : "확정하기"}
               </button>
             </div>
           </div>
