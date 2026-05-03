@@ -47,7 +47,7 @@ def employee_to_dict(user: User):
     }
 
 
-@router.get("")
+@router.get("", summary="직원 목록 조회")
 def get_employees(
     db: Session = Depends(get_db),
     current_user=Depends(require_admin),
@@ -56,7 +56,7 @@ def get_employees(
     return [employee_to_dict(e) for e in employees]
 
 
-@router.post("", status_code=201)
+@router.post("", status_code=201, summary="직원 등록")
 def create_employee(
     payload: EmployeeCreate,
     db: Session = Depends(get_db),
@@ -93,7 +93,7 @@ def create_employee(
     return result
 
 
-@router.put("/{user_id}")
+@router.put("/{user_id}", summary="직원 정보 수정")
 def update_employee(
     user_id: int,
     payload: EmployeeUpdate,
@@ -133,7 +133,7 @@ def update_employee(
     }
 
 
-@router.post("/{user_id}/reset-password")
+@router.post("/{user_id}/reset-password", summary="비밀번호 초기화")
 def reset_employee_password(
     user_id: int,
     db: Session = Depends(get_db),

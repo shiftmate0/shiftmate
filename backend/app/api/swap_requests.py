@@ -39,7 +39,7 @@ class AdminReject(BaseModel):
 # ════════════════════════════════════════════════════════
 # POST /api/swap-requests  —  교대 요청 생성 (PRD_11)
 # ════════════════════════════════════════════════════════
-@router.post("/swap-requests", status_code=201)
+@router.post("/swap-requests", status_code=201, summary="교대 요청 생성")
 def create_swap_request(
     body: SwapRequestCreate,
     db: Session = Depends(get_db),
@@ -109,7 +109,7 @@ def create_swap_request(
 # ════════════════════════════════════════════════════════
 # GET /api/swap-requests  —  목록 조회 (PRD_11)
 # ════════════════════════════════════════════════════════
-@router.get("/swap-requests")
+@router.get("/swap-requests", summary="교대 요청 목록 조회")
 def list_swap_requests(
     status: str = None,
     role: str = None,
@@ -192,7 +192,7 @@ def list_swap_requests(
 # ════════════════════════════════════════════════════════
 # GET /api/swap-requests/{id}  —  상세 조회 (PRD_12)
 # ════════════════════════════════════════════════════════
-@router.get("/swap-requests/{swap_request_id}")
+@router.get("/swap-requests/{swap_request_id}", summary="교대 요청 상세 조회")
 def get_swap_request(
     swap_request_id: int,
     db: Session = Depends(get_db),
@@ -271,7 +271,7 @@ def get_swap_request(
 # ════════════════════════════════════════════════════════
 # PATCH /api/swap-requests/{id}/cancel  —  요청 취소 (PRD_11)
 # ════════════════════════════════════════════════════════
-@router.patch("/swap-requests/{swap_request_id}/cancel")
+@router.patch("/swap-requests/{swap_request_id}/cancel", summary="교대 요청 취소")
 def cancel_swap_request(
     swap_request_id: int,
     db: Session = Depends(get_db),
@@ -313,7 +313,7 @@ def cancel_swap_request(
 # ════════════════════════════════════════════════════════
 # POST /api/swap-requests/{id}/proposals  —  제안 생성 (PRD_12)
 # ════════════════════════════════════════════════════════
-@router.post("/swap-requests/{swap_request_id}/proposals", status_code=201)
+@router.post("/swap-requests/{swap_request_id}/proposals", status_code=201, summary="교대 제안 생성")
 def create_proposal(
     swap_request_id: int,
     body: ProposalCreate,
@@ -414,7 +414,7 @@ def create_proposal(
 # ════════════════════════════════════════════════════════
 # PATCH /api/swap-requests/{id}/accept  —  제안 선택 (PRD_12)
 # ════════════════════════════════════════════════════════
-@router.patch("/swap-requests/{swap_request_id}/accept")
+@router.patch("/swap-requests/{swap_request_id}/accept", summary="교대 제안 선택")
 def accept_proposal(
     swap_request_id: int,
     body: AcceptProposal,
@@ -478,7 +478,7 @@ def accept_proposal(
 # ════════════════════════════════════════════════════════
 # PATCH /api/admin/swap-requests/{id}/approve  —  관리자 승인 (PRD_13)
 # ════════════════════════════════════════════════════════
-@router.patch("/admin/swap-requests/{swap_request_id}/approve")
+@router.patch("/admin/swap-requests/{swap_request_id}/approve", summary="교대 요청 승인 (관리자)")
 def approve_swap_request(
     swap_request_id: int,
     db: Session = Depends(get_db),
@@ -565,7 +565,7 @@ def approve_swap_request(
 # ════════════════════════════════════════════════════════
 # PATCH /api/admin/swap-requests/{id}/reject  —  관리자 반려 (PRD_13)
 # ════════════════════════════════════════════════════════
-@router.patch("/admin/swap-requests/{swap_request_id}/reject")
+@router.patch("/admin/swap-requests/{swap_request_id}/reject", summary="교대 요청 반려 (관리자)")
 def reject_swap_request_admin(
     swap_request_id: int,
     body: AdminReject,

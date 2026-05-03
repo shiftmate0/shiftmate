@@ -40,7 +40,7 @@ router = APIRouter()
 # ════════════════════════════════════════════════════════
 # GET /api/schedules  —  근무표 조회 (관리자·직원 공용)
 # ════════════════════════════════════════════════════════
-@router.get("/schedules", response_model=ScheduleListResponse)
+@router.get("/schedules", response_model=ScheduleListResponse, summary="근무표 조회")
 def get_schedules(
     year: int = Query(...),
     month: int = Query(...),
@@ -86,7 +86,7 @@ def get_schedules(
 # ════════════════════════════════════════════════════════
 # GET /api/schedules/me  —  내 근무표 조회 (직원 전용)
 # ════════════════════════════════════════════════════════
-@router.get("/schedules/me", response_model=ScheduleListResponse)
+@router.get("/schedules/me", response_model=ScheduleListResponse, summary="내 근무표 조회")
 def get_my_schedules(
     year: int = Query(...),
     month: int = Query(...),
@@ -133,7 +133,7 @@ def get_my_schedules(
 # ════════════════════════════════════════════════════════
 # POST /api/admin/schedules/bulk  —  배치 저장 (upsert)
 # ════════════════════════════════════════════════════════
-@router.post("/admin/schedules/bulk", response_model=ScheduleBulkResponse)
+@router.post("/admin/schedules/bulk", response_model=ScheduleBulkResponse, summary="근무표 일괄 저장")
 def bulk_upsert_schedules(
     body: List[ScheduleBulkItem],
     current_user: User = Depends(require_admin),
@@ -179,7 +179,7 @@ def bulk_upsert_schedules(
 # ════════════════════════════════════════════════════════
 # PUT /api/admin/schedules/{id}  —  단건 수정
 # ════════════════════════════════════════════════════════
-@router.put("/admin/schedules/{schedule_id}", response_model=ScheduleUpdateResponse)
+@router.put("/admin/schedules/{schedule_id}", response_model=ScheduleUpdateResponse, summary="근무 일정 수정")
 def update_schedule(
     schedule_id: int,
     body: ScheduleUpdateRequest,
@@ -218,7 +218,7 @@ def update_schedule(
 # ════════════════════════════════════════════════════════
 # POST /api/admin/schedules/{year}/{month}/confirm  —  월 확정
 # ════════════════════════════════════════════════════════
-@router.post("/admin/schedules/{year}/{month}/confirm", response_model=ConfirmResponse)
+@router.post("/admin/schedules/{year}/{month}/confirm", response_model=ConfirmResponse, summary="근무표 월 확정")
 def confirm_schedule(
     year: int,
     month: int,
@@ -253,7 +253,7 @@ def confirm_schedule(
 # ════════════════════════════════════════════════════════
 # GET /api/admin/schedules/validate  —  근무표 검증
 # ════════════════════════════════════════════════════════
-@router.get("/admin/schedules/validate", response_model=ValidateResponse)
+@router.get("/admin/schedules/validate", response_model=ValidateResponse, summary="근무표 유효성 검증")
 def validate_schedules(
     year: int = Query(...),
     month: int = Query(...),
@@ -276,7 +276,7 @@ def validate_schedules(
 _DAY_LABELS = ["월", "화", "수", "목", "금", "토", "일"]
 
 
-@router.get("/employee/dashboard", response_model=DashboardResponse)
+@router.get("/employee/dashboard", response_model=DashboardResponse, summary="직원 대시보드")
 def employee_dashboard(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),

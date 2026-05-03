@@ -17,13 +17,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
-app.include_router(employees.router, prefix="/api/admin/employees", tags=["employees"])
-app.include_router(shift_types.router, prefix="/api/admin/shift-types", tags=["shift-types"])
-app.include_router(schedules.router, prefix="/api", tags=["schedules"])
-app.include_router(swap_requests.router, prefix="/api", tags=["swap-requests"])
-app.include_router(time_off_requests.router, prefix="/api", tags=["time-off"])
-app.include_router(dashboard.router, prefix="/api", tags=["dashboard"])
+app.include_router(auth.router, prefix="/api/auth", tags=["인증"])
+app.include_router(employees.router, prefix="/api/admin/employees", tags=["직원 관리"])
+app.include_router(shift_types.router, prefix="/api/admin/shift-types", tags=["근무 유형"])
+app.include_router(schedules.router, prefix="/api", tags=["근무표"])
+app.include_router(swap_requests.router, prefix="/api", tags=["교대 신청"])
+app.include_router(time_off_requests.router, prefix="/api", tags=["휴무·휴가 신청"])
+app.include_router(dashboard.router, prefix="/api", tags=["대시보드"])
 
 
 @app.on_event("startup")
