@@ -17,7 +17,7 @@ class ChangePasswordRequest(BaseModel):
     new_password: str
 
 
-@router.post("/login", response_model=TokenResponse)
+@router.post("/login", response_model=TokenResponse, summary="로그인")
 def login(request: LoginRequest, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.employee_no == request.employee_no).first()
 
@@ -55,12 +55,12 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
     }
 
 
-@router.post("/logout")
+@router.post("/logout", summary="로그아웃")
 def logout(current_user: User = Depends(get_current_user)):
     return {"message": "로그아웃되었습니다"}
 
 
-@router.get("/me")
+@router.get("/me", summary="내 정보 조회")
 def get_me(current_user: User = Depends(get_current_user)):
     return {
         "user_id": current_user.user_id,
@@ -73,7 +73,7 @@ def get_me(current_user: User = Depends(get_current_user)):
     }
 
 
-@router.put("/password")
+@router.put("/password", summary="비밀번호 변경")
 def change_password(
     request: ChangePasswordRequest,
     current_user: User = Depends(get_current_user),

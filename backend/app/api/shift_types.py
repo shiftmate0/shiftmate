@@ -47,7 +47,7 @@ def to_dict(st: ShiftType) -> dict:
     }
 
 
-@router.get("")
+@router.get("", summary="근무 유형 목록 조회")
 def get_shift_types(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
@@ -60,7 +60,7 @@ def get_shift_types(
     return [to_dict(st) for st in rows]
 
 
-@router.post("", status_code=201)
+@router.post("", status_code=201, summary="근무 유형 생성")
 def create_shift_type(
     data: ShiftTypeCreate,
     db: Session = Depends(get_db),
@@ -90,7 +90,7 @@ def create_shift_type(
     return to_dict(st)
 
 
-@router.put("/{shift_type_id}")
+@router.put("/{shift_type_id}", summary="근무 유형 수정")
 def update_shift_type(
     shift_type_id: int,
     data: ShiftTypeUpdate,
@@ -115,7 +115,7 @@ def update_shift_type(
     return to_dict(st)
 
 
-@router.delete("/{shift_type_id}")
+@router.delete("/{shift_type_id}", summary="근무 유형 삭제")
 def delete_shift_type(
     shift_type_id: int,
     db: Session = Depends(get_db),
