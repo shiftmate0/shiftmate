@@ -68,7 +68,7 @@ def _check_consecutive_night(rows, users, settings) -> List[Dict]:
                 count += 1
                 end_date = work_date
             else:
-                if count >= settings.max_consecutive_night:
+                if count > settings.max_consecutive_night:
                     name = users[user_id].name if user_id in users else str(user_id)
                     warnings.append({
                         "type": "consecutive_night",
@@ -85,7 +85,7 @@ def _check_consecutive_night(rows, users, settings) -> List[Dict]:
                 end_date = None
 
         # 월말까지 야간 연속인 경우
-        if count >= settings.max_consecutive_night:
+        if count > settings.max_consecutive_night:
             name = users[user_id].name if user_id in users else str(user_id)
             warnings.append({
                 "type": "consecutive_night",
