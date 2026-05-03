@@ -8,6 +8,7 @@ import Sidebar from '../Sidebar'
 export default function AppLayout() {
   const { user } = useAuth()
   const [notifOpen, setNotifOpen] = useState(false)
+  const unreadCount = 0
 
   const role = user?.role
   const userName = user?.name ?? ''
@@ -35,7 +36,7 @@ export default function AppLayout() {
               className="relative w-9 h-9 rounded-xl flex items-center justify-center text-slate-500 hover:bg-slate-100 transition-colors"
             >
               <Bell size={18} />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-red-500" />
+              {unreadCount > 0 && <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-red-500" />}
             </button>
             {notifOpen && (
               <div
