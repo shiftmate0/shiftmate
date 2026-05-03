@@ -99,8 +99,8 @@ function ShiftCell({
       onMouseLeave={() => setHover(false)}
     >
       {(isLocked || disabled) && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-50/80">
-          <Lock size={12} className="text-slate-400" />
+        <div className="absolute top-0.5 right-0.5 z-10">
+          <Lock size={10} className="text-slate-400" />
         </div>
       )}
 
