@@ -226,8 +226,10 @@
 
 ### 흐름 3. 확정 후 근무표 수정
 
-1. 관리자가 확정된 근무표를 수정한다.
-2. 수정된 근무표는 자동 반영되며, 직원은 변경 내용을 확인할 수 있다.
+1. 관리자가 확정된 근무표의 셀을 수정한다.
+2. 저장 버튼을 클릭하면 배치 저장과 함께 `schedule_periods.status`가 `draft`로 자동 전환된다.
+3. 수정 내용은 즉시 DB에 반영된다.
+4. 관리자가 다시 근무표 확정 버튼을 눌러 재확정한다. `schedule_periods` 레코드는 생성하지 않고 기존 레코드의 `status`를 `confirmed`로 업데이트한다.
 
 ---
 
@@ -400,7 +402,9 @@
 
 | 이벤트 | 변경 대상 | 부수 효과 |
 |---|---|---|
-| 관리자 월 확정 | `schedule_periods.status` → `confirmed` | — |
+| 관리자 월 확정 (최초) | `schedule_periods` 레코드 생성, `status` = `confirmed` | — |
+| 관리자 월 확정 (재확정) | 기존 `schedule_periods.status` → `confirmed` | `confirmed_at`, `confirmed_by` 갱신 |
+| 관리자 배치 저장 (confirmed 상태에서) | `schedules` 레코드 수정 | `schedule_periods.status` → `draft` 자동 전환 |
 | 관리자 개별 수정(A3) | `schedules` 레코드 수정 | — |
 
 ---
