@@ -140,6 +140,8 @@ export default function SchedulesPage() {
 
   const prevMonth = urlMonth === 1 ? 12 : urlMonth - 1;
   const prevYear  = urlMonth === 1 ? urlYear - 1 : urlYear;
+  const nextMonth = urlMonth === 12 ? 1 : urlMonth + 1;
+  const nextYear  = urlMonth === 12 ? urlYear + 1 : urlYear;
   const daysInMonth     = new Date(urlYear, urlMonth, 0).getDate();
   const daysInPrevMonth = new Date(prevYear, prevMonth, 0).getDate();
   const monthStartDow     = new Date(urlYear, urlMonth - 1, 1).getDay();
@@ -354,9 +356,23 @@ export default function SchedulesPage() {
             근무표 작성
           </h1>
           <div className="flex items-center gap-3 mt-1">
+            <button
+              onClick={() => setSearchParams({ year: prevYear, month: prevMonth, view: "grid" })}
+              className="text-slate-400 hover:text-slate-600 transition-colors"
+              style={{ fontSize: 16, lineHeight: 1, padding: "2px 6px" }}
+            >
+              ←
+            </button>
             <span className="text-slate-500 text-sm">
               {urlYear}년 {urlMonth}월 · {confirmed ? "확정 완료" : "작성 중"}
             </span>
+            <button
+              onClick={() => setSearchParams({ year: nextYear, month: nextMonth, view: "grid" })}
+              className="text-slate-400 hover:text-slate-600 transition-colors"
+              style={{ fontSize: 16, lineHeight: 1, padding: "2px 6px" }}
+            >
+              →
+            </button>
             <span
               className="px-2.5 py-0.5 rounded-full text-xs font-medium"
               style={
