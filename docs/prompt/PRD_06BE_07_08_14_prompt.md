@@ -62,7 +62,7 @@ GET /api/schedules
     role='employee' + user_id 파라미터 없음 → current_user.user_id 자동 필터
     period_status 조회:
       period = db.query(SchedulePeriod).filter_by(year=year, month=month).first()
-      period_status = "confirmed" if period else "draft"
+      period_status = period.status if period else "draft"
     정렬: work_date ASC, user_id ASC
   응답 200:
     {
@@ -100,6 +100,8 @@ POST /api/admin/schedules/bulk
       VALUES (...)
       ON DUPLICATE KEY UPDATE shift_type_id=VALUES(shift_type_id)
     단일 트랜잭션
+    저장 후 해당 월 schedule_periods.status가 'confirmed'이면 'draft'로 자동 전환
+      (수정 후 재확정 유도 — 확정 상태를 실제 근무표와 일치하게 유지)
   응답 200: { "saved": int }
 
 PUT /api/admin/schedules/{id}
@@ -118,10 +120,11 @@ PUT /api/admin/schedules/{id}
 POST /api/admin/schedules/{year}/{month}/confirm
   권한: require_admin
   처리:
-    UNIQUE(year, month) 중복 → 400 "이미 확정된 근무표입니다"
-    schedule_periods INSERT:
-      year, month, status='confirmed',
-      confirmed_at=now(), confirmed_by=current_user.user_id
+    UPSERT (재확정 허용):
+      기존 레코드 있음: status='confirmed', confirmed_at=now(), confirmed_by=current_user.user_id 업데이트
+      기존 레코드 없음: schedule_periods INSERT
+        year, month, status='confirmed',
+        confirmed_at=now(), confirmed_by=current_user.user_id
   응답 200: { period_id, year, month, status, confirmed_at, confirmed_by }
 
 GET /api/admin/schedules/validate
@@ -140,7 +143,8 @@ GET /api/admin/schedules/validate
 - GET /api/schedules period_status 래퍼 응답 확인
 - bulk upsert (ON DUPLICATE KEY UPDATE) 동작 확인
 - is_locked 차단 확인
-- confirm + UNIQUE 중복 차단 확인
+- confirm UPSERT 동작 확인 (최초 확정 + 재확정 모두 200 응답)
+- bulk 저장 후 confirmed → draft 자동 전환 확인
 - 완료 후 사용자2(멤버1)에게 알림 → PRD_06 FE 착수 가능
 ```
 

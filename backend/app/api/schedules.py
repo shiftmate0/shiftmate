@@ -63,7 +63,7 @@ def get_schedules(
     schedules = query.order_by(Schedule.work_date, Schedule.user_id).all()
 
     period = db.query(SchedulePeriod).filter_by(year=year, month=month).first()
-    period_status = "confirmed" if period else "draft"
+    period_status = period.status if period else "draft"
 
     items = [
         ScheduleItem(
@@ -110,7 +110,7 @@ def get_my_schedules(
     )
 
     period = db.query(SchedulePeriod).filter_by(year=year, month=month).first()
-    period_status = "confirmed" if period else "draft"
+    period_status = period.status if period else "draft"
 
     items = [
         ScheduleItem(
@@ -173,6 +173,16 @@ def bulk_upsert_schedules(
         saved += 1
 
     db.commit()
+
+    # 확정 상태였다면 draft로 되돌림 (수정 후 재확정 유도)
+    period = db.query(SchedulePeriod).filter_by(
+        year=body[0].work_date.year,
+        month=body[0].work_date.month,
+    ).first()
+    if period and period.status == "confirmed":
+        period.status = "draft"
+        db.commit()
+
     return ScheduleBulkResponse(saved=saved)
 
 
@@ -227,18 +237,23 @@ def confirm_schedule(
 ):
     existing = db.query(SchedulePeriod).filter_by(year=year, month=month).first()
     if existing:
-        raise HTTPException(status_code=400, detail="이미 확정된 근무표입니다")
-
-    period = SchedulePeriod(
-        year=year,
-        month=month,
-        status="confirmed",
-        confirmed_at=datetime.now(),
-        confirmed_by=current_user.user_id,
-    )
-    db.add(period)
-    db.commit()
-    db.refresh(period)
+        existing.status = "confirmed"
+        existing.confirmed_at = datetime.now()
+        existing.confirmed_by = current_user.user_id
+        db.commit()
+        db.refresh(existing)
+        period = existing
+    else:
+        period = SchedulePeriod(
+            year=year,
+            month=month,
+            status="confirmed",
+            confirmed_at=datetime.now(),
+            confirmed_by=current_user.user_id,
+        )
+        db.add(period)
+        db.commit()
+        db.refresh(period)
 
     return ConfirmResponse(
         period_id=period.period_id,

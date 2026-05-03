@@ -99,8 +99,8 @@ function ShiftCell({
       onMouseLeave={() => setHover(false)}
     >
       {(isLocked || disabled) && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-50/80">
-          <Lock size={12} className="text-slate-400" />
+        <div className="absolute top-0.5 right-0.5 z-10">
+          <Lock size={10} className="text-slate-400" />
         </div>
       )}
 
@@ -231,7 +231,6 @@ export default function SchedulesPage() {
   }, [validations, employees]);
 
   const handleChange = (userId, day, code) => {
-    if (confirmed) return;
     setSchedules((prev) => ({
       ...prev,
       [userId]: { ...(prev[userId] || {}), [day]: code },
@@ -261,6 +260,7 @@ export default function SchedulesPage() {
       await apiClient.post("/admin/schedules/bulk", items);
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
+      if (confirmed) setPeriodStatus("draft");
       fetchValidations();
     } catch (err) {
       console.error("저장 실패:", err);
@@ -394,7 +394,7 @@ export default function SchedulesPage() {
 
           <button
             onClick={handleSave}
-            disabled={confirmed || saving}
+            disabled={saving}
             className="flex items-center gap-2 px-4 py-2 rounded-[14px] text-sm font-medium border border-slate-200 text-slate-700 hover:bg-slate-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Save size={14} />
@@ -586,7 +586,6 @@ export default function SchedulesPage() {
                             isWeekend={isWeekend(dow)}
                             hasWarning={warningDays.has(`${emp.user_id}-${day}`)}
                             isLocked={lockedCells[emp.user_id]?.[day] || false}
-                            disabled={confirmed}
                             shiftTypes={shiftTypeList}
                             shiftColorMap={shiftColorMap}
                             shiftBgMap={shiftBgMap}
@@ -615,8 +614,8 @@ export default function SchedulesPage() {
               {urlYear}년 {urlMonth}월 근무표 확정
             </h2>
             <p className="text-sm text-slate-500 mb-4">
-              월 단위로 일괄 확정됩니다. 확정 후에는 셀 선택이 잠기며,
-              관리자가 별도 수정해야 합니다.
+              월 단위로 일괄 확정됩니다. 확정 후에도 수정 후 저장하면
+              재확정할 수 있습니다.
             </p>
             {validations.length > 0 && (
               <div

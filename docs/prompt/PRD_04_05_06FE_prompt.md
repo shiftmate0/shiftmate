@@ -307,7 +307,7 @@ PageHeader:
     'confirmed' → Badge variant="status-approved" "Confirmed"
     'draft'     → Badge variant="default" "Draft" 회색
   [검증 실행] secondary 버튼
-  [확정하기] primary 버튼 (period_status='confirmed' 시 disabled)
+  [확정하기] primary 버튼 (항상 활성 — 확정 후 수정·재확정 가능)
 
 그리드 Table:
   행: GET /api/admin/employees → is_active=true + created_at ASC
@@ -334,6 +334,8 @@ PageHeader:
     기존 schedule (schedule_id 있음): PUT /api/admin/schedules/{id}
     미배정 셀 (schedule_id 없음): POST /api/admin/schedules/bulk [{ user_id, work_date, shift_type_id }]
     성공: schedules state 부분 업데이트 (해당 셀만, 전체 reload 없음)
+          period_status가 'confirmed'였으면 → state를 'draft'로 전환
+          (백엔드가 저장 시 자동으로 confirmed → draft 전환하므로 FE state도 동기화)
     400 is_locked: Toast error "교대 협의 중인 시프트는 수정할 수 없습니다"
 
 검증 결과 영역 (그리드 하단):
@@ -377,7 +379,6 @@ PageHeader:
     POST /api/admin/schedules/{year}/{month}/confirm
     성공: period_status state → 'confirmed'
           Toast success `${year}년 ${month}월 근무표가 확정되었습니다`
-    400 "이미 확정된": Toast error "이미 확정된 근무표입니다"
 
 검증 경고 모달 (Modal size="md"):
   제목: "⚠ 검증 경고"
