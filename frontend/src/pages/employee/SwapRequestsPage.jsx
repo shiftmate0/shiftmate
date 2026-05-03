@@ -353,7 +353,7 @@ export default function SwapRequestsPage() {
           <Input
             label="교대 희망 근무"
             value={selectedShiftCode}
-            readOnly
+            disabled
           />
           <div className="grid grid-cols-2 gap-3">
             <Input

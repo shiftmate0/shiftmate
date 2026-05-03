@@ -89,7 +89,9 @@ export default function AdminRequestsPage() {
   })
 
   const filteredSwap = swapList.filter((r) => {
-    const matchStatus = activeStatus === '' || r.status === activeStatus
+    const matchStatus = activeStatus === ''
+      || r.status === activeStatus
+      || (activeStatus === 'pending' && r.status === 'accepted')
     const showSwap    = typeFilter === '' || typeFilter === 'SWAP'
     return matchStatus && showSwap
   })

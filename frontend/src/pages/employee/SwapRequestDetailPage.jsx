@@ -519,7 +519,7 @@ export default function SwapRequestDetailPage() {
               })),
             ]}
           />
-          <Input label="근무 유형" value={proposeShiftDisplay} readOnly />
+          <Input label="근무 유형" value={proposeShiftDisplay} disabled />
 
           {proposeError && <p className="text-sm text-red-500">{proposeError}</p>}
         </ModalBody>

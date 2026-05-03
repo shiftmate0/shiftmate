@@ -147,6 +147,7 @@ def list_swap_requests(
             )
             qs = qs.filter(
                 (SwapRequest.requester_id == current_user.user_id)
+                | (SwapRequest.status == "pending")
                 | SwapRequest.swap_request_id.in_(proposer_ids)
             )
 
@@ -168,6 +169,25 @@ def list_swap_requests(
             .filter(SwapProposal.swap_request_id == req.swap_request_id)
             .scalar()
         )
+
+        proposer_name = None
+        proposer_shift_code = None
+        if req.accepted_proposal_id:
+            accepted_proposal = db.query(SwapProposal).filter(
+                SwapProposal.swap_proposal_id == req.accepted_proposal_id
+            ).first()
+            if accepted_proposal:
+                proposer = db.query(User).filter(User.user_id == accepted_proposal.proposer_id).first()
+                proposer_name = proposer.name if proposer else None
+                p_sched = db.query(Schedule).filter(
+                    Schedule.schedule_id == accepted_proposal.proposer_schedule_id
+                ).first()
+                if p_sched:
+                    p_shift = db.query(ShiftType).filter(
+                        ShiftType.shift_type_id == p_sched.shift_type_id
+                    ).first()
+                    proposer_shift_code = p_shift.code if p_shift else None
+
         result.append({
             "swap_request_id": req.swap_request_id,
             "requester_id": req.requester_id,
@@ -182,6 +202,8 @@ def list_swap_requests(
             "required_years_max": req.required_years_max,
             "status": req.status,
             "proposal_count": proposal_count,
+            "proposer_name": proposer_name,
+            "proposer_shift_code": proposer_shift_code,
             "expires_at": req.expires_at,
             "created_at": req.created_at,
         })
@@ -208,7 +230,8 @@ def get_swap_request(
             SwapProposal.swap_request_id == swap_request_id,
             SwapProposal.proposer_id == current_user.user_id,
         ).first() is not None
-        if not is_requester and not is_proposer:
+        can_access = is_requester or is_proposer or (swap_req.status == "pending")
+        if not can_access:
             raise HTTPException(status_code=403, detail="접근 권한이 없습니다")
 
     schedule = db.query(Schedule).filter(Schedule.schedule_id == swap_req.requester_schedule_id).first()
