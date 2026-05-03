@@ -42,6 +42,7 @@ SECRET_KEY=your-secret-key-here
 ADMIN_EMPLOYEE_NO=ADMIN001
 ADMIN_NAME=관리자
 ADMIN_PASSWORD=admin1234!
+DEMO_MODE=true
 ```
 
 ## 핵심 패턴
