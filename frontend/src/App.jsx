@@ -11,6 +11,7 @@ import AdminDashboardPage from './pages/admin/DashboardPage'
 import AdminEmployeesPage from './pages/admin/EmployeesPage'
 import AdminShiftTypesPage from './pages/admin/ShiftTypesPage'
 import AdminSchedulesPage from './pages/admin/SchedulesPage'
+import AdminScheduleViewPage from './pages/admin/ScheduleViewPage'
 import AdminRequestsPage from './pages/admin/RequestsPage'
 
 import EmployeeDashboardPage from './pages/employee/DashboardPage'
@@ -87,6 +88,9 @@ export default function App() {
             } />
             <Route path="/admin/schedules" element={
               <RequireAdmin><AdminSchedulesPage /></RequireAdmin>
+            } />
+            <Route path="/admin/schedule-view" element={
+              <RequireAdmin><AdminScheduleViewPage /></RequireAdmin>
             } />
             <Route path="/admin/requests" element={
               <RequireAdmin><AdminRequestsPage /></RequireAdmin>

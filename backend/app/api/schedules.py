@@ -55,9 +55,7 @@ def get_schedules(
         Schedule.work_date.between(first_day, last_day)
     )
 
-    if current_user.role == "employee" and not user_id:
-        query = query.filter(Schedule.user_id == current_user.user_id)
-    elif user_id:
+    if user_id:
         query = query.filter(Schedule.user_id == user_id)
 
     schedules = query.order_by(Schedule.work_date, Schedule.user_id).all()

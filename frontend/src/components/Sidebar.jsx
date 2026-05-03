@@ -11,8 +11,9 @@ const adminNavItems = [
   { path: '/admin/dashboard',   icon: LayoutDashboard, label: '대시보드' },
   { path: '/admin/employees',   icon: Users,           label: '직원 관리' },
   { path: '/admin/shift-types', icon: Layers,          label: '근무 유형 관리' },
-  { path: '/admin/schedules',   icon: ClipboardList,   label: '근무표 작성' },
-  { path: '/admin/requests',    icon: Bell,            label: '요청 관리' },
+  { path: '/admin/schedules',     icon: ClipboardList,   label: '근무표 작성' },
+  { path: '/admin/schedule-view', icon: Calendar,        label: '근무표 조회' },
+  { path: '/admin/requests',      icon: Bell,            label: '요청 관리' },
 ]
 
 const employeeNavItems = [
